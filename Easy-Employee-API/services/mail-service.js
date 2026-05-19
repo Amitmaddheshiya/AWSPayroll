@@ -7,11 +7,13 @@ const isConnectionError = (error) =>
   /timeout|connection/i.test(error?.message || '');
 
 const parseEmailFrom = value => {
-  const text = String(value || '').trim();
+  const text = String(value || '').trim().replace(/^"|"$/g, '');
   const match = text.match(/^(.*?)<([^>]+)>$/);
   if (!match) return {name: '', email: text};
   return {name: match[1].replace(/"/g, '').trim(), email: match[2].trim()};
 };
+
+const normalizeEmailFrom = value => String(value || '').trim().replace(/^"|"$/g, '');
 
 const providerFromEnv = () => {
   const explicit = String(process.env.MAIL_PROVIDER || '').trim().toLowerCase();
@@ -57,7 +59,7 @@ const sendViaHttpProvider = async ({from, to, subject, text}) => {
     return postJson(
       'https://api.resend.com/emails',
       {Authorization: `Bearer ${process.env.RESEND_API_KEY}`},
-      {from, to: [to], subject, text},
+      {from: normalizeEmailFrom(from), to: [to], subject, text},
     );
   }
   if (provider === 'brevo') {
@@ -116,7 +118,12 @@ class MailService {
         response: error.response,
         message: error.message,
       });
-      throw ErrorHandler.serverError('Unable to send OTP email through HTTP mail provider. Please check MAIL_PROVIDER API key and verified sender.');
+      const providerMessage =
+        error.response?.message ||
+        error.response?.error ||
+        error.response?.errors?.[0]?.message ||
+        error.message;
+      throw ErrorHandler.serverError(`Unable to send OTP email through ${providerFromEnv() || 'HTTP mail provider'}: ${providerMessage}`);
     }
 
     try {
