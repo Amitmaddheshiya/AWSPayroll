@@ -244,7 +244,6 @@ const buildBankSalaryRows = payload => [
     'TDS Monthly',
     'Total Deductions',
     'Final Salary Paid',
-    'Approved Expense Details',
   ],
   ...(payload.data || []).map(item => [
     item.name,
@@ -275,9 +274,6 @@ const buildBankSalaryRows = payload => [
     item.deductions?.tdsMonthly || 0,
     item.deductions?.totalDeductions || 0,
     item.totalPay || 0,
-    (item.approvedExpenseItems || [])
-      .map(expense => `${expense.appliedDate || '-'} ${expense.type || 'Expense'}: ${expense.amount || 0}`)
-      .join('; '),
   ]),
 ];
 
@@ -1147,6 +1143,7 @@ class UserController {
         ? approvedExpenseItems.reduce((sum, item) => sum + toNumber(item.amount), 0)
         : 0;
       const cappedPayableDays = Math.min(payableDays, cycle.openDaysInMonth);
+      const payrollAbsentDays = Number(Math.max(cycle.openDaysInMonth - cappedPayableDays, 0).toFixed(2));
       const salaryTillDate = Number((cappedPayableDays * perDaySalary).toFixed(2));
       const totalPay = Number((salaryTillDate + totalExpenses).toFixed(2));
 
@@ -1192,7 +1189,8 @@ class UserController {
         weeklyOffUnpaidDays,
         weeklyOffDays,
         holidayPaidDays,
-        absentDays,
+        absentDays: payrollAbsentDays,
+        attendanceAbsentDays: absentDays,
         salaryTillDate,
         totalExpenses,
         approvedExpenseItems: approvedExpenseItems.map(item => ({

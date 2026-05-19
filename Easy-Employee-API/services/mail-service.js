@@ -24,9 +24,17 @@ class MailService {
       console.log('Mail sent successfully:', info.response);
       return info;
     } catch (error) {
-      console.error('Mail send failed:', error.message);
+      console.error('Mail send failed:', {
+        code: error.code,
+        command: error.command,
+        response: error.response,
+        message: error.message,
+      });
       if (isConnectionError(error)) {
-        throw ErrorHandler.serverError('Email service connection timed out. Please try again in a few minutes.');
+        throw ErrorHandler.serverError('Email service timed out while connecting to SMTP. Please try again, or switch SMTP_PORT to 465 and SMTP_SECURE=true on Render.');
+      }
+      if (['EAUTH', 'EENVELOPE'].includes(error?.code)) {
+        throw ErrorHandler.serverError('Email authentication failed. Generate a new Gmail App Password and update SMTP_PASS / EMAIL_FROM.');
       }
       throw ErrorHandler.serverError('Unable to send OTP email. Please check email settings and try again.');
     }

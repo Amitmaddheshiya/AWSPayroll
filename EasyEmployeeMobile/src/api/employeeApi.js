@@ -1,7 +1,7 @@
 import client from './client';
 
 export const login = credentials => client.post('/auth/login', credentials);
-export const forgotPassword = data => client.post('/auth/forgot', data);
+export const forgotPassword = data => client.post('/auth/forgot', data, {timeout: 70000});
 export const resetPassword = data => client.patch('/auth/reset', data);
 export const refreshSession = () => client.get('/auth/refresh');
 export const logout = () => client.get('/auth/logout');

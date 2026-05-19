@@ -88,18 +88,6 @@ export const verifyOfficeLocation = async workType => {
 
   const hasPermission = await requestLocationPermission();
   if (!hasPermission) {
-    const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
-    if (isDev) {
-      return {
-        allowed: true,
-        distanceMeters: 0,
-        accuracy: officeLocation.radiusMeters || 100,
-        latitude: officeLocation.latitude,
-        longitude: officeLocation.longitude,
-        officeLocation,
-        message: 'Development mode location fallback used.',
-      };
-    }
     Alert.alert(
       'Location required',
       'Please allow precise location access to mark onsite attendance.',

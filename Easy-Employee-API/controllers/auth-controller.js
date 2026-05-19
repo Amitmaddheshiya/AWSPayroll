@@ -54,18 +54,27 @@ res.cookie("refreshToken", refreshToken, cookieOptions);
 
     forgot = async (req,res,next) =>
     {
-        const {email:requestEmail} = req.body;
-        if(!requestEmail) return next(ErrorHandler.badRequest());
-        if(!validator.isEmail(requestEmail)) return next(ErrorHandler.badRequest('Inavlid Email Address'));
-        const user = await userService.findUser({email:requestEmail});
-        if(!user) return next(ErrorHandler.notFound('Invalid Email Address'));
-        const {_id:userId,name,email} = user;
-        const otp = otpService.generateOtp();
-        const type = Number(process.env.TYPE_FORGOT_PASSWORD || 2);
-        await otpService.removeOtp(userId);
-        await otpService.storeOtp(userId,otp,type);
-        await mailService.sendForgotPasswordMail(name,email,otp);
-        res.json({success:true,message:'Email has been sent to your email address'});
+        try {
+            const {email:requestEmail} = req.body;
+            if(!requestEmail) return next(ErrorHandler.badRequest());
+            if(!validator.isEmail(requestEmail)) return next(ErrorHandler.badRequest('Invalid Email Address'));
+            const user = await userService.findUser({email:requestEmail});
+            if(!user) return next(ErrorHandler.notFound('Invalid Email Address'));
+            const {_id:userId,name,email} = user;
+            const otp = otpService.generateOtp();
+            const type = Number(process.env.TYPE_FORGOT_PASSWORD || 2);
+            await otpService.removeOtp(userId);
+            await otpService.storeOtp(userId,otp,type);
+            try {
+                await mailService.sendForgotPasswordMail(name,email,otp);
+            } catch (mailError) {
+                await otpService.removeOtp(userId);
+                return next(mailError);
+            }
+            res.json({success:true,message:'Email has been sent to your email address'});
+        } catch (error) {
+            return next(error);
+        }
     }
 
     reset = async (req,res,next) =>
