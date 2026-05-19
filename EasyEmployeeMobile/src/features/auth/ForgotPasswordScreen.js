@@ -78,6 +78,9 @@ export const ForgotPasswordScreen = ({navigation}) => {
               ? 'Enter your registered email. We will send an OTP for verification.'
               : 'Enter the OTP from email and choose a new secure password.'}
           </Text>
+          <Text style={[styles.hrMessage, {backgroundColor: colors.success, color: colors.surface}]}>
+            If you forgot your password, contact: Your HR Manager
+          </Text>
 
           <View style={styles.form}>
             <AppTextInput
@@ -138,6 +141,16 @@ const styles = StyleSheet.create({
   subtitle: {
     lineHeight: 22,
     marginTop: spacing.sm,
+  },
+  hrMessage: {
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: '900',
+    lineHeight: 20,
+    marginTop: spacing.md,
+    overflow: 'hidden',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   form: {
     gap: spacing.md,
