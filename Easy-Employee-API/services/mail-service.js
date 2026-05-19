@@ -6,6 +6,87 @@ const isConnectionError = (error) =>
   ['ETIMEDOUT', 'ESOCKET', 'ECONNECTION', 'ECONNRESET'].includes(error?.code) ||
   /timeout|connection/i.test(error?.message || '');
 
+const parseEmailFrom = value => {
+  const text = String(value || '').trim();
+  const match = text.match(/^(.*?)<([^>]+)>$/);
+  if (!match) return {name: '', email: text};
+  return {name: match[1].replace(/"/g, '').trim(), email: match[2].trim()};
+};
+
+const providerFromEnv = () => {
+  const explicit = String(process.env.MAIL_PROVIDER || '').trim().toLowerCase();
+  if (explicit) return explicit;
+  if (process.env.RESEND_API_KEY) return 'resend';
+  if (process.env.BREVO_API_KEY) return 'brevo';
+  if (process.env.SENDGRID_API_KEY) return 'sendgrid';
+  return '';
+};
+
+const postJson = async (url, headers, body) => {
+  if (typeof fetch !== 'function') {
+    throw new Error('HTTP mail provider requires Node 18+ fetch support.');
+  }
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', ...headers},
+    body: JSON.stringify(body),
+  });
+  const raw = await response.text();
+  let data = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    data = {message: raw};
+  }
+  if (!response.ok) {
+    const message = data.message || data.error || data.errors?.[0]?.message || raw || `HTTP ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.response = data;
+    throw error;
+  }
+  return data;
+};
+
+const sendViaHttpProvider = async ({from, to, subject, text}) => {
+  const provider = providerFromEnv();
+  if (!provider) return null;
+
+  const parsedFrom = parseEmailFrom(from);
+  if (provider === 'resend') {
+    return postJson(
+      'https://api.resend.com/emails',
+      {Authorization: `Bearer ${process.env.RESEND_API_KEY}`},
+      {from, to: [to], subject, text},
+    );
+  }
+  if (provider === 'brevo') {
+    return postJson(
+      'https://api.brevo.com/v3/smtp/email',
+      {'api-key': process.env.BREVO_API_KEY},
+      {
+        sender: {name: parsedFrom.name || undefined, email: parsedFrom.email},
+        to: [{email: to}],
+        subject,
+        textContent: text,
+      },
+    );
+  }
+  if (provider === 'sendgrid') {
+    return postJson(
+      'https://api.sendgrid.com/v3/mail/send',
+      {Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`},
+      {
+        personalizations: [{to: [{email: to}]}],
+        from: {email: parsedFrom.email, name: parsedFrom.name || undefined},
+        subject,
+        content: [{type: 'text/plain', value: text}],
+      },
+    );
+  }
+  throw ErrorHandler.serverError(`Unsupported MAIL_PROVIDER '${provider}'. Use resend, brevo, or sendgrid.`);
+};
+
 class MailService {
   sendForgotPasswordMail = async (name, email, otp) => {
     const { subject, text } = mailTemplate.forgotPassword(name, otp);
@@ -19,6 +100,25 @@ class MailService {
       subject,
       text,
     };
+    try {
+      const httpInfo = await sendViaHttpProvider(mailOption);
+      if (httpInfo) {
+        console.log('Mail sent successfully via HTTP provider:', {
+          provider: providerFromEnv(),
+          id: httpInfo.id || httpInfo.messageId || 'ok',
+        });
+        return httpInfo;
+      }
+    } catch (error) {
+      console.error('HTTP mail provider failed:', {
+        provider: providerFromEnv(),
+        status: error.status,
+        response: error.response,
+        message: error.message,
+      });
+      throw ErrorHandler.serverError('Unable to send OTP email through HTTP mail provider. Please check MAIL_PROVIDER API key and verified sender.');
+    }
+
     try {
       const info = await transport.sendMail(mailOption);
       console.log('Mail sent successfully:', info.response);
