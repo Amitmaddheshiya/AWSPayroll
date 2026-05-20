@@ -123,6 +123,7 @@ export const AttendanceScreen = () => {
       const cycleDates = buildCycleDates(cycle, selectedYear, selectedMonth, currentParts);
       const recordsByDate = new Map(records.map(item => [`${item.year}-${item.month}-${item.date}`, item]));
       const autoPresentWeeklyOff = shouldAutoPresentWeeklyOff(cycle);
+      const effectiveWeeklyOffDays = (cycle?.weeklyOffDays?.length ? cycle.weeklyOffDays : weeklyOffDays).map(item => String(item).toLowerCase());
 
       return cycleDates.map(parts => {
         const {year, month, date} = parts;
@@ -143,7 +144,21 @@ export const AttendanceScreen = () => {
           reason: 'Check-in not recorded',
         };
 
-        if (!isWeeklyOffDate(item)) return item;
+        const isWeeklyOff = effectiveWeeklyOffDays.includes(String(item.day || day).toLowerCase());
+        if (isAutoWeeklyOffRecord(item) && (!autoPresentWeeklyOff || !isWeeklyOff)) {
+          return {
+            ...item,
+            present: false,
+            displayStatus: 'Absent',
+            displayTimeStatus: '-',
+            attendanceIn: '-',
+            attendanceOut: '-',
+            late: '-',
+            totalHours: '-',
+            reason: 'Stale auto weekly off ignored by current policy',
+          };
+        }
+        if (!isWeeklyOff) return item;
         if (autoPresentWeeklyOff) {
           return {
             ...item,
@@ -170,7 +185,7 @@ export const AttendanceScreen = () => {
         };
       });
     },
-    [currentParts, cycle, filters.month, filters.year, isWeeklyOffDate, records],
+    [currentParts, cycle, filters.month, filters.year, records, weeklyOffDays],
   );
 
   const visibleRecords = useMemo(() => {

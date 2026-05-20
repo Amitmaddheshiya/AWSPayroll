@@ -347,11 +347,8 @@ const hoursBetweenTimes = (start, end) => {
 };
 
 const timeStatusFromHours = (day, totalHours, status = '', minimumFullDayHours = 7) => {
-  const dayLower = String(day || '').toLowerCase();
   const statusLower = String(status || '').toLowerCase();
   if (statusLower === 'approved leave' || statusLower === 'leave') return 'Full Time';
-  if (dayLower === 'sunday') return 'Holiday';
-  if (dayLower === 'saturday') return totalHours > 0 ? 'Full Time' : '-';
   return Number(totalHours || 0) >= Number(minimumFullDayHours || 7) ? 'Full Time' : 'Half Time';
 };
 
@@ -428,9 +425,7 @@ const parseDayMonthRule = value => {
   return { day, month };
 };
 
-const getPayrollCycleSettings = async (year, month) => {
-  const masterPolicy = await getMasterSalaryPolicy();
-  const rules = masterPolicy?.rules?.length ? masterPolicy.rules : fallbackMasterSalaryRules;
+const buildPayrollCycleSettingsFromRules = (rules, year, month) => {
   const monthDays = daysInMonth(year, month);
   const requestedStartDay = getRuleNumber(rules, ['Salary Cycle Start Day', 'Cycle Start Day'], 1);
   const requestedEndDay = getRuleNumber(rules, ['Salary Cycle End Day', 'Cycle End Day'], monthDays);
@@ -481,6 +476,12 @@ const getPayrollCycleSettings = async (year, month) => {
   };
 };
 
+const getPayrollCycleSettings = async (year, month) => {
+  const masterPolicy = await getMasterSalaryPolicy();
+  const rules = masterPolicy?.rules?.length ? masterPolicy.rules : fallbackMasterSalaryRules;
+  return buildPayrollCycleSettingsFromRules(rules, year, month);
+};
+
 const addDays = (date, days) => {
   const next = normalizeDateOnly(date);
   next.setDate(next.getDate() + days);
@@ -529,6 +530,10 @@ const isWeeklyOffPolicyAttendance = item =>
   String(item?.timeStatus || '').toLowerCase() === 'weekly off' ||
   String(item?.reason || '').toLowerCase().includes('weekly off by master salary rule');
 
+const shouldIgnoreAutoWeeklyOffRecord = (item, cycle, day) =>
+  isAutoWeeklyOffAttendance(item) &&
+  (!shouldAutoPresentWeeklyOff(cycle) || !cycle.weeklyOffDays.includes(String(day || item?.day || '').toLowerCase()));
+
 const normalizeAttendanceForWeeklyOffPolicy = (item, cycle) => {
   if (!item) return item;
   const day = String(item.day || '').toLowerCase();
@@ -562,14 +567,43 @@ const attendanceCyclePayload = cycle => ({
   shouldAutoPresentWeeklyOff: shouldAutoPresentWeeklyOff(cycle),
 });
 
+const staleAutoWeeklyOffUpdate = day => ({
+  present: false,
+  status: 'Absent',
+  attendanceIn: '-',
+  attendanceOut: '-',
+  late: '-',
+  totalHours: '-',
+  timeStatus: 'Weekly Off',
+  reason: `${day} weekly off by master salary rule`,
+});
+
+const calculateSalaryFromRuleInputs = ({
+  assignedNetPay = 0,
+  fixedPaidDays = 0,
+  payableDays = 0,
+  approvedExpenses = 0,
+}) => {
+  const paidDays = Number(fixedPaidDays || 0);
+  const perDaySalary = paidDays > 0 ? Number((toNumber(assignedNetPay) / paidDays).toFixed(2)) : 0;
+  const cappedPayableDays = Math.min(toNumber(payableDays), paidDays);
+  const salaryTillDate = Number((cappedPayableDays * perDaySalary).toFixed(2));
+  return {
+    perDaySalary,
+    payableDays: Number(cappedPayableDays.toFixed(2)),
+    salaryTillDate,
+    totalPay: Number((salaryTillDate + toNumber(approvedExpenses)).toFixed(2)),
+  };
+};
+
 const ensureAutoAttendanceForCycle = async ({ cycle, cycleDates, users, approvedLeaves }) => {
   const weeklyOffDates = cycleDates.filter(dateObj => {
     const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
     return cycle.weeklyOffDays.includes(day);
   });
-  if (!shouldAutoPresentWeeklyOff(cycle) && weeklyOffDates.length && users.length) {
+  if (!shouldAutoPresentWeeklyOff(cycle) && cycleDates.length && users.length) {
     await Promise.all(users.flatMap(user =>
-      weeklyOffDates.map(dateObj => {
+      cycleDates.map(dateObj => {
         const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
         return Attendance.updateOne(
           {
@@ -584,16 +618,7 @@ const ensureAutoAttendanceForCycle = async ({ cycle, cycleDates, users, approved
             ],
           },
           {
-            $set: {
-              present: false,
-              status: 'Absent',
-              attendanceIn: '-',
-              attendanceOut: '-',
-              late: '-',
-              totalHours: '-',
-              timeStatus: 'Weekly Off',
-              reason: `${day} weekly off by master salary rule`,
-            },
+            $set: staleAutoWeeklyOffUpdate(day),
           },
         );
       })
@@ -1066,42 +1091,23 @@ class UserController {
     );
 
     if (!shouldPayWeeklyOff) {
-      const staleWeeklyOffDates = cycleDates.filter(dateObj => {
-        const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-        return cycle.weeklyOffDays.includes(day);
-      });
       await Promise.all(users.flatMap(user =>
-        staleWeeklyOffDates.map(async dateObj => {
+        cycleDates.map(async dateObj => {
           const employeeId = String(user._id);
           const isoDate = formatIsoDate(dateObj);
           const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
           const record = attendanceByEmployeeDate.get(`${employeeId}-${isoDate}`);
           if (!isAutoWeeklyOffAttendance(record)) return;
+          const update = staleAutoWeeklyOffUpdate(day);
           await Attendance.updateOne(
             { _id: record._id },
             {
-              $set: {
-                present: false,
-                status: 'Absent',
-                attendanceIn: '-',
-                attendanceOut: '-',
-                late: '-',
-                totalHours: '-',
-                timeStatus: 'Weekly Off',
-                reason: `${day} weekly off by master salary rule`,
-              },
+              $set: update,
             },
           );
           attendanceByEmployeeDate.set(`${employeeId}-${isoDate}`, {
             ...(typeof record.toObject === 'function' ? record.toObject() : record),
-            present: false,
-            status: 'Absent',
-            attendanceIn: '-',
-            attendanceOut: '-',
-            late: '-',
-            totalHours: '-',
-            timeStatus: 'Weekly Off',
-            reason: `${day} weekly off by master salary rule`,
+            ...update,
           });
         })
       ));
@@ -1231,7 +1237,10 @@ class UserController {
       const assignedGross = toNumber(empSalary?.earnings?.gross);
       const assignedDeductions = toNumber(empSalary?.deductions?.totalDeductions);
       const assignedNetPay = toNumber(empSalary?.netPay) || Math.max(assignedGross - assignedDeductions, 0);
-      const perDaySalary = cycle.openDaysInMonth > 0 ? Number((assignedNetPay / cycle.openDaysInMonth).toFixed(2)) : 0;
+      const perDaySalary = calculateSalaryFromRuleInputs({
+        assignedNetPay,
+        fixedPaidDays: cycle.openDaysInMonth,
+      }).perDaySalary;
       let payableDays = 0;
       let presentDays = 0;
       let halfDays = 0;
@@ -1344,9 +1353,15 @@ class UserController {
       const totalExpenses = cycle.expenseReimbursementPaid
         ? approvedExpenseItems.reduce((sum, item) => sum + toNumber(item.amount), 0)
         : 0;
-      const cappedPayableDays = Math.min(payableDays, cycle.openDaysInMonth);
-      const salaryTillDate = Number((cappedPayableDays * perDaySalary).toFixed(2));
-      const totalPay = Number((salaryTillDate + totalExpenses).toFixed(2));
+      const salaryAmounts = calculateSalaryFromRuleInputs({
+        assignedNetPay,
+        fixedPaidDays: cycle.openDaysInMonth,
+        payableDays,
+        approvedExpenses: totalExpenses,
+      });
+      const cappedPayableDays = salaryAmounts.payableDays;
+      const salaryTillDate = salaryAmounts.salaryTillDate;
+      const totalPay = salaryAmounts.totalPay;
 
       return {
         employeeID: user._id,
@@ -2608,4 +2623,16 @@ deleteEmployeeAttendance = async (req, res, next) => {
 
 }
 
-module.exports = new UserController();
+const userController = new UserController();
+userController.__test = {
+  buildPayrollCycleSettingsFromRules,
+  calculateSalaryFromRuleInputs,
+  shouldAutoPresentWeeklyOff,
+  isAutoWeeklyOffAttendance,
+  shouldIgnoreAutoWeeklyOffRecord,
+  normalizeAttendanceForWeeklyOffPolicy,
+  staleAutoWeeklyOffUpdate,
+  timeStatusFromHours,
+};
+
+module.exports = userController;
