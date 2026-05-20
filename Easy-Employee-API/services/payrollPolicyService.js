@@ -18,7 +18,7 @@ const defaultPolicies = [
     rules: [
       ['Fixed Paid Days', '26'],
       ['Salary Cycle Start Day', '1'],
-      ['Salary Cycle End Day', '31'],
+      ['Salary Cycle End Day', '30'],
       ['Annual Start Date', '01-04'],
       ['Weekly Off Days', 'Sunday'],
       ['Approved Leave Paid', 'Yes'],
@@ -81,7 +81,7 @@ const defaultPolicies = [
     rules: [
       ['Office Open Days In Month', '26'],
       ['Salary Cycle Start Day', '1'],
-      ['Salary Cycle End Day', '31'],
+      ['Salary Cycle End Day', '30'],
       ['Half Time Minimum Hours', '7'],
       ['Approved Leave Attendance', 'Full Time'],
       ['Sunday Auto Paid When Open Days Above', '26'],

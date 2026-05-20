@@ -74,7 +74,7 @@ const isAutoWeeklyOffRecord = item =>
   String(item?.reason || '').toLowerCase().includes('auto-present');
 const currentCycleStartParts = (policies, today) => {
   const startDay = ruleNumberFromPolicies(policies, ['Salary Cycle Start Day', 'Cycle Start Day'], 1);
-  const endDay = ruleNumberFromPolicies(policies, ['Salary Cycle End Day', 'Cycle End Day'], 31);
+  const endDay = Math.min(ruleNumberFromPolicies(policies, ['Salary Cycle End Day', 'Cycle End Day'], 30), 30);
   if (startDay > endDay && today.date <= endDay) {
     const previous = new Date(today.year, today.month - 2, 1);
     return {year: previous.getFullYear(), month: previous.getMonth() + 1};

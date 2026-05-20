@@ -393,7 +393,7 @@ const splitRuleList = value =>
 const fallbackMasterSalaryRules = [
   { label: 'Fixed Paid Days', value: '26' },
   { label: 'Salary Cycle Start Day', value: '1' },
-  { label: 'Salary Cycle End Day', value: '31' },
+  { label: 'Salary Cycle End Day', value: '30' },
   { label: 'Annual Start Date', value: '01-04' },
   { label: 'Weekly Off Days', value: 'Sunday' },
   { label: 'Approved Leave Paid', value: 'Yes' },
@@ -435,7 +435,7 @@ const getPayrollCycleSettings = async (year, month) => {
   const requestedStartDay = getRuleNumber(rules, ['Salary Cycle Start Day', 'Cycle Start Day'], 1);
   const requestedEndDay = getRuleNumber(rules, ['Salary Cycle End Day', 'Cycle End Day'], monthDays);
   const startDay = Math.min(Math.max(requestedStartDay, 1), 31);
-  const endDay = Math.min(Math.max(requestedEndDay, 1), 31);
+  const endDay = Math.min(Math.max(requestedEndDay, 1), 30);
   const halfTimeMinimumHours = getRuleNumber(rules, ['Half Time Minimum Hours', 'Minimum Full Time Hours', 'Minimum Full Day Hours'], 7);
   const sundayAutoPaidAbove = getRuleNumber(rules, ['Sunday Auto Paid When Open Days Above'], 26);
   const weeklyOffDays = splitRuleList(getRuleValue(rules, ['Weekly Off Days', 'Weekly Off'], 'Sunday')).map(item => item.toLowerCase());
@@ -524,10 +524,15 @@ const isAutoWeeklyOffAttendance = item =>
   String(item?.attendanceOut || '').toLowerCase() === 'auto weekly off' ||
   String(item?.reason || '').toLowerCase().includes('auto-present');
 
+const isWeeklyOffPolicyAttendance = item =>
+  isAutoWeeklyOffAttendance(item) ||
+  String(item?.timeStatus || '').toLowerCase() === 'weekly off' ||
+  String(item?.reason || '').toLowerCase().includes('weekly off by master salary rule');
+
 const normalizeAttendanceForWeeklyOffPolicy = (item, cycle) => {
   if (!item) return item;
   const day = String(item.day || '').toLowerCase();
-  if (shouldAutoPresentWeeklyOff(cycle) || !cycle.weeklyOffDays.includes(day) || !isAutoWeeklyOffAttendance(item)) {
+  if (shouldAutoPresentWeeklyOff(cycle) || !cycle.weeklyOffDays.includes(day) || !isWeeklyOffPolicyAttendance(item)) {
     return item;
   }
   const record = typeof item.toObject === 'function' ? item.toObject() : { ...item };
@@ -558,6 +563,43 @@ const attendanceCyclePayload = cycle => ({
 });
 
 const ensureAutoAttendanceForCycle = async ({ cycle, cycleDates, users, approvedLeaves }) => {
+  const weeklyOffDates = cycleDates.filter(dateObj => {
+    const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+    return cycle.weeklyOffDays.includes(day);
+  });
+  if (!shouldAutoPresentWeeklyOff(cycle) && weeklyOffDates.length && users.length) {
+    await Promise.all(users.flatMap(user =>
+      weeklyOffDates.map(dateObj => {
+        const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+        return Attendance.updateOne(
+          {
+            employeeID: user._id,
+            year: dateObj.getFullYear(),
+            month: dateObj.getMonth() + 1,
+            date: dateObj.getDate(),
+            $or: [
+              { attendanceIn: 'Auto Weekly Off' },
+              { attendanceOut: 'Auto Weekly Off' },
+              { reason: /auto-present/i },
+            ],
+          },
+          {
+            $set: {
+              present: false,
+              status: 'Absent',
+              attendanceIn: '-',
+              attendanceOut: '-',
+              late: '-',
+              totalHours: '-',
+              timeStatus: 'Weekly Off',
+              reason: `${day} weekly off by master salary rule`,
+            },
+          },
+        );
+      })
+    ));
+  }
+
   const paidHolidayDates = cycleDates.filter(dateObj =>
     cycle.paidHolidayDates.includes(formatIsoDate(dateObj).toLowerCase())
   );
@@ -623,10 +665,6 @@ const ensureAutoAttendanceForCycle = async ({ cycle, cycleDates, users, approved
   ));
 
   if (!shouldAutoPresentWeeklyOff(cycle)) return;
-  const weeklyOffDates = cycleDates.filter(dateObj => {
-    const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-    return cycle.weeklyOffDays.includes(day);
-  });
   await Promise.all(users.flatMap(user =>
     weeklyOffDates.map(dateObj => {
       const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
@@ -1026,6 +1064,48 @@ class UserController {
         item,
       ]),
     );
+
+    if (!shouldPayWeeklyOff) {
+      const staleWeeklyOffDates = cycleDates.filter(dateObj => {
+        const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+        return cycle.weeklyOffDays.includes(day);
+      });
+      await Promise.all(users.flatMap(user =>
+        staleWeeklyOffDates.map(async dateObj => {
+          const employeeId = String(user._id);
+          const isoDate = formatIsoDate(dateObj);
+          const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+          const record = attendanceByEmployeeDate.get(`${employeeId}-${isoDate}`);
+          if (!isAutoWeeklyOffAttendance(record)) return;
+          await Attendance.updateOne(
+            { _id: record._id },
+            {
+              $set: {
+                present: false,
+                status: 'Absent',
+                attendanceIn: '-',
+                attendanceOut: '-',
+                late: '-',
+                totalHours: '-',
+                timeStatus: 'Weekly Off',
+                reason: `${day} weekly off by master salary rule`,
+              },
+            },
+          );
+          attendanceByEmployeeDate.set(`${employeeId}-${isoDate}`, {
+            ...(typeof record.toObject === 'function' ? record.toObject() : record),
+            present: false,
+            status: 'Absent',
+            attendanceIn: '-',
+            attendanceOut: '-',
+            late: '-',
+            totalHours: '-',
+            timeStatus: 'Weekly Off',
+            reason: `${day} weekly off by master salary rule`,
+          });
+        })
+      ));
+    }
 
     const paidHolidayDates = cycleDates.filter(dateObj =>
       cycle.paidHolidayDates.includes(formatIsoDate(dateObj).toLowerCase())

@@ -71,7 +71,7 @@ const ruleNumberFromPolicies = (policies, labels, fallback) => {
 const shouldAutoPresentWeeklyOff = cycle => Number(cycle?.fixedPaidDays ?? cycle?.openDaysInMonth) === 30;
 const currentCycleStartParts = (policies, today) => {
   const startDay = ruleNumberFromPolicies(policies, ['Salary Cycle Start Day', 'Cycle Start Day'], 1);
-  const endDay = ruleNumberFromPolicies(policies, ['Salary Cycle End Day', 'Cycle End Day'], 31);
+  const endDay = Math.min(ruleNumberFromPolicies(policies, ['Salary Cycle End Day', 'Cycle End Day'], 30), 30);
   if (startDay > endDay && today.date <= endDay) {
     const previous = new Date(today.year, today.month - 2, 1);
     return {year: previous.getFullYear(), month: previous.getMonth() + 1};
@@ -226,7 +226,7 @@ export const AdminAttendanceScreen = ({route}) => {
     );
   }, [employees, search]);
 
-  const attendanceRows = useMemo(() => {
+  const cycleAttendanceRows = useMemo(() => {
     if (!selectedEmployee) return [];
     const recordByDate = new Map(records.map(item => [`${item.year}-${item.month}-${item.date}`, item]));
     const cycleDates = buildCycleDates(cycle, year, month, today);
@@ -265,10 +265,29 @@ export const AdminAttendanceScreen = ({route}) => {
           : record?.reason || statusForMissing(leaves, rowYear, rowMonth, date),
       });
     });
+    return rows.sort((a, b) => new Date(b.year, b.month - 1, b.date) - new Date(a.year, a.month - 1, a.date));
+  }, [cycle, leaves, month, records, selectedEmployee, selectedEmployeeId, today, weeklyOffDays, year]);
+
+  const attendanceRows = useMemo(() => {
     const selectedDate = Number(dateFilter || 0);
-    const visibleRows = selectedDate ? rows.filter(row => row.date === selectedDate) : rows;
-    return visibleRows.sort((a, b) => new Date(b.year, b.month - 1, b.date) - new Date(a.year, a.month - 1, a.date));
-  }, [cycle, dateFilter, leaves, month, records, selectedEmployee, selectedEmployeeId, today, weeklyOffDays, year]);
+    return selectedDate ? cycleAttendanceRows.filter(row => row.date === selectedDate) : cycleAttendanceRows;
+  }, [cycleAttendanceRows, dateFilter]);
+
+  const selectedAttendanceSummary = useMemo(() => {
+    const present = cycleAttendanceRows.filter(row =>
+      ['present', 'approved leave', 'half day'].includes(String(row.status || '').toLowerCase()),
+    ).length;
+    const absent = cycleAttendanceRows.filter(row =>
+      String(row.status || '').toLowerCase() === 'absent' ||
+      String(row.reason || '').toLowerCase() === 'check-in not recorded',
+    ).length;
+    return {
+      present,
+      absent,
+      fixedPaidDays: Number(cycle?.fixedPaidDays ?? cycle?.openDaysInMonth) || 0,
+      records: cycleAttendanceRows.length,
+    };
+  }, [cycle, cycleAttendanceRows]);
 
   const todayAbsentRows = useMemo(() => {
     const todayIso = apiDate(today.year, today.month, today.date);
@@ -490,12 +509,33 @@ export const AdminAttendanceScreen = ({route}) => {
       </Card>
 
       {selectedEmployee ? (
-        <Card>
-          <Text style={styles.title}>{selectedEmployee.name || selectedEmployee.username || '-'}</Text>
-          <Text style={styles.meta}>Email: {selectedEmployee.email || '-'}</Text>
-          <Text style={styles.meta}>Employee ID: {selectedEmployee.username || '-'}</Text>
-          <Text style={styles.meta}>Salary cycle records: {attendanceRows.length}</Text>
-        </Card>
+        <View style={styles.selectedCard}>
+          <View style={styles.selectedHeader}>
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarText}>{String(selectedEmployee.name || selectedEmployee.username || 'E').charAt(0).toUpperCase()}</Text>
+            </View>
+            <View style={styles.flex}>
+              <Text style={styles.selectedName}>{selectedEmployee.name || selectedEmployee.username || '-'}</Text>
+              <Text style={styles.selectedMeta}>{selectedEmployee.email || '-'}</Text>
+              <Text style={styles.selectedMeta}>ID: {selectedEmployee.username || selectedEmployee.employeeCode || selectedEmployeeId}</Text>
+            </View>
+          </View>
+          <View style={styles.selectedStats}>
+            <View style={[styles.selectedStat, styles.presentStat]}>
+              <Text style={styles.selectedStatLabel}>Present</Text>
+              <Text style={styles.selectedStatValue}>{selectedAttendanceSummary.present}</Text>
+            </View>
+            <View style={[styles.selectedStat, styles.absentStat]}>
+              <Text style={styles.selectedStatLabel}>Absent</Text>
+              <Text style={styles.selectedStatValue}>{selectedAttendanceSummary.absent}</Text>
+            </View>
+            <View style={[styles.selectedStat, styles.fixedStat]}>
+              <Text style={styles.selectedStatLabel}>Fixed Paid Days</Text>
+              <Text style={styles.selectedStatValue}>{selectedAttendanceSummary.fixedPaidDays}</Text>
+            </View>
+          </View>
+          <Text style={styles.selectedFoot}>Salary cycle records: {selectedAttendanceSummary.records}</Text>
+        </View>
       ) : null}
 
       {attendanceRows.map(row => (
@@ -577,6 +617,34 @@ const styles = StyleSheet.create({
   detailValue: {color: colors.text, fontSize: 13, fontWeight: '900', marginTop: spacing.xs},
   detailLabelTone: {color: colors.surface},
   detailValueTone: {color: colors.surface},
+  selectedCard: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+  },
+  selectedHeader: {alignItems: 'center', flexDirection: 'row', gap: spacing.sm},
+  avatarCircle: {
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  avatarText: {color: colors.surface, fontSize: 18, fontWeight: '900'},
+  selectedName: {color: colors.text, fontSize: 16, fontWeight: '900'},
+  selectedMeta: {color: colors.textMuted, fontSize: 12, marginTop: 2},
+  selectedStats: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md},
+  selectedStat: {borderRadius: 8, flexBasis: '30%', flexGrow: 1, padding: spacing.sm},
+  presentStat: {backgroundColor: colors.success},
+  absentStat: {backgroundColor: colors.danger},
+  fixedStat: {backgroundColor: colors.info},
+  selectedStatLabel: {color: colors.surface, fontSize: 11, fontWeight: '900'},
+  selectedStatValue: {color: colors.surface, fontSize: 18, fontWeight: '900', marginTop: 2},
+  selectedFoot: {color: colors.textMuted, fontSize: 12, fontWeight: '800', marginTop: spacing.sm},
   actions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm},
   error: {color: colors.danger},
   empty: {color: colors.textMuted, textAlign: 'center'},

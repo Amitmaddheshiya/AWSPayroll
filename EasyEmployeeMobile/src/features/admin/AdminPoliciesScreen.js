@@ -31,7 +31,7 @@ const masterRuleTemplate = {
   rules: [
     {label: 'Fixed Paid Days', value: '26', note: '26 for Sunday off, 22 for Saturday and Sunday off'},
     {label: 'Salary Cycle Start Day', value: '1', note: 'Monthly cycle start date'},
-    {label: 'Salary Cycle End Day', value: '31', note: 'Use 31 for month end'},
+    {label: 'Salary Cycle End Day', value: '30', note: 'Payroll cycle counts a maximum of 30 days; 31st is ignored'},
     {label: 'Annual Start Date', value: '01-04', note: 'DD-MM. Attendance, monthly salary, leave, and expense history resets when this day-month arrives'},
     {label: 'Weekly Off Days', value: 'Sunday', note: 'Use Sunday or Saturday, Sunday. Paid working days are calculated automatically.'},
     {label: 'Approved Leave Paid', value: 'Yes', note: 'Approved leave salary paid'},
