@@ -68,6 +68,7 @@ const ruleNumberFromPolicies = (policies, labels, fallback) => {
   const value = Number(String(rule?.value || '').match(/\d+/)?.[0]);
   return Number.isFinite(value) ? value : fallback;
 };
+const shouldAutoPresentWeeklyOff = cycle => Number(cycle?.fixedPaidDays ?? cycle?.openDaysInMonth) === 30;
 const currentCycleStartParts = (policies, today) => {
   const startDay = ruleNumberFromPolicies(policies, ['Salary Cycle Start Day', 'Cycle Start Day'], 1);
   const endDay = ruleNumberFromPolicies(policies, ['Salary Cycle End Day', 'Cycle End Day'], 31);
@@ -229,6 +230,7 @@ export const AdminAttendanceScreen = ({route}) => {
     if (!selectedEmployee) return [];
     const recordByDate = new Map(records.map(item => [`${item.year}-${item.month}-${item.date}`, item]));
     const cycleDates = buildCycleDates(cycle, year, month, today);
+    const autoPresentWeeklyOff = shouldAutoPresentWeeklyOff(cycle);
     const rows = [];
     cycleDates.forEach(parts => {
       const {year: rowYear, month: rowMonth, date} = parts;
@@ -236,11 +238,12 @@ export const AdminAttendanceScreen = ({route}) => {
       const day = dayNames[new Date(rowYear, rowMonth - 1, date).getDay()];
       const isWeeklyOff = weeklyOffDays.includes(day.toLowerCase());
       const isAutoWeeklyOff = isWeeklyOff && (
+        autoPresentWeeklyOff ||
         record?.attendanceIn === 'Auto Weekly Off' ||
         String(record?.reason || '').toLowerCase().includes('auto-present')
       );
       const missingStatus = isWeeklyOff ? 'Weekly Off' : statusForMissing(leaves, rowYear, rowMonth, date);
-      const status = isAutoWeeklyOff ? record?.status || 'Present' : isWeeklyOff ? 'Weekly Off' : record?.status || (record ? (record.present ? 'Present' : 'Absent') : missingStatus);
+      const status = isAutoWeeklyOff && autoPresentWeeklyOff ? 'Present' : isWeeklyOff ? 'Weekly Off' : record?.status || (record ? (record.present ? 'Present' : 'Absent') : missingStatus);
       rows.push({
         key: `${rowYear}-${rowMonth}-${date}`,
         id: record?._id || record?.id || '',
@@ -252,12 +255,14 @@ export const AdminAttendanceScreen = ({route}) => {
         date,
         day: record?.day || day,
         status,
-        attendanceIn: isWeeklyOff && !isAutoWeeklyOff ? '-' : record?.attendanceIn || '-',
-        attendanceOut: isWeeklyOff && !isAutoWeeklyOff ? '-' : record?.attendanceOut || '-',
-        late: isWeeklyOff && !isAutoWeeklyOff ? '-' : record?.late || '-',
-        totalHours: isWeeklyOff && !isAutoWeeklyOff ? '-' : record?.totalHours || '-',
+        attendanceIn: isWeeklyOff ? (autoPresentWeeklyOff ? record?.attendanceIn || 'Auto Weekly Off' : '-') : record?.attendanceIn || '-',
+        attendanceOut: isWeeklyOff ? (autoPresentWeeklyOff ? record?.attendanceOut || 'Auto Weekly Off' : '-') : record?.attendanceOut || '-',
+        late: isWeeklyOff ? (autoPresentWeeklyOff ? record?.late || 'No' : '-') : record?.late || '-',
+        totalHours: isWeeklyOff ? (autoPresentWeeklyOff ? record?.totalHours || '0' : '-') : record?.totalHours || '-',
         timeStatus: record?.timeStatus || (status === 'Present' ? 'Full Time' : status === 'Weekly Off' ? 'Weekly Off' : '-'),
-        reason: record?.reason || (isWeeklyOff ? `${day} weekly off by master salary rule` : statusForMissing(leaves, rowYear, rowMonth, date)),
+        reason: isWeeklyOff
+          ? (autoPresentWeeklyOff ? record?.reason || `${day} auto-present because fixed paid days is 30` : `${day} weekly off by master salary rule`)
+          : record?.reason || statusForMissing(leaves, rowYear, rowMonth, date),
       });
     });
     const selectedDate = Number(dateFilter || 0);

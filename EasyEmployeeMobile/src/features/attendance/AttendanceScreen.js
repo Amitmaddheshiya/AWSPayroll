@@ -68,6 +68,10 @@ const ruleNumberFromPolicies = (policies, labels, fallback) => {
   const value = Number(String(rule?.value || '').match(/\d+/)?.[0]);
   return Number.isFinite(value) ? value : fallback;
 };
+const shouldAutoPresentWeeklyOff = cycle => Number(cycle?.fixedPaidDays ?? cycle?.openDaysInMonth) === 30;
+const isAutoWeeklyOffRecord = item =>
+  String(item?.attendanceIn || '').toLowerCase() === 'auto weekly off' ||
+  String(item?.reason || '').toLowerCase().includes('auto-present');
 const currentCycleStartParts = (policies, today) => {
   const startDay = ruleNumberFromPolicies(policies, ['Salary Cycle Start Day', 'Cycle Start Day'], 1);
   const endDay = ruleNumberFromPolicies(policies, ['Salary Cycle End Day', 'Cycle End Day'], 31);
@@ -118,6 +122,7 @@ export const AttendanceScreen = () => {
       const selectedYear = Number(filters.year) || currentParts.year;
       const cycleDates = buildCycleDates(cycle, selectedYear, selectedMonth, currentParts);
       const recordsByDate = new Map(records.map(item => [`${item.year}-${item.month}-${item.date}`, item]));
+      const autoPresentWeeklyOff = shouldAutoPresentWeeklyOff(cycle);
 
       return cycleDates.map(parts => {
         const {year, month, date} = parts;
@@ -138,14 +143,31 @@ export const AttendanceScreen = () => {
           reason: 'Check-in not recorded',
         };
 
-        return isWeeklyOffDate(item)
-          ? {
-              ...item,
-              displayStatus: 'Weekly Off',
-              displayTimeStatus: 'Weekly Off',
-              reason: item.reason || `${item.day || 'Day'} weekly off by master salary rule`,
-            }
-          : item;
+        if (!isWeeklyOffDate(item)) return item;
+        if (autoPresentWeeklyOff) {
+          return {
+            ...item,
+            present: true,
+            displayStatus: 'Present',
+            displayTimeStatus: 'Full Time',
+            attendanceIn: item.attendanceIn && item.attendanceIn !== '-' ? item.attendanceIn : 'Auto Weekly Off',
+            attendanceOut: item.attendanceOut && item.attendanceOut !== '-' ? item.attendanceOut : 'Auto Weekly Off',
+            late: item.late && item.late !== '-' ? item.late : 'No',
+            totalHours: item.totalHours && item.totalHours !== '-' ? item.totalHours : '0',
+            reason: isAutoWeeklyOffRecord(item) ? item.reason : `${item.day || 'Day'} auto-present because fixed paid days is 30`,
+          };
+        }
+        return {
+          ...item,
+          present: false,
+          displayStatus: 'Weekly Off',
+          displayTimeStatus: 'Weekly Off',
+          attendanceIn: '-',
+          attendanceOut: '-',
+          late: '-',
+          totalHours: '-',
+          reason: `${item.day || 'Day'} weekly off by master salary rule`,
+        };
       });
     },
     [currentParts, cycle, filters.month, filters.year, isWeeklyOffDate, records],
@@ -162,8 +184,8 @@ export const AttendanceScreen = () => {
   }, [displayRecords, filters.day, filters.mode]);
 
   const monthlyCount = useMemo(
-    () => displayRecords.filter(item => item.present && !isWeeklyOffDate(item) && String(item.status || '').toLowerCase() !== 'weekly off').length,
-    [displayRecords, isWeeklyOffDate],
+    () => displayRecords.filter(item => item.present && (!isWeeklyOffDate(item) || shouldAutoPresentWeeklyOff(cycle)) && String(item.displayStatus || item.status || '').toLowerCase() !== 'weekly off').length,
+    [cycle, displayRecords, isWeeklyOffDate],
   );
   const weeklyOffMonthCount = useMemo(() => {
     return displayRecords.filter(isWeeklyOffDate).length;

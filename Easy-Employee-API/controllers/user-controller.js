@@ -523,6 +523,33 @@ const getAttendanceCycleSettings = async (year, month) => {
   };
 };
 
+const shouldAutoPresentWeeklyOff = cycle => Number(cycle?.fixedPaidDays ?? cycle?.openDaysInMonth) === 30;
+
+const isAutoWeeklyOffAttendance = item =>
+  String(item?.attendanceIn || '').toLowerCase() === 'auto weekly off' ||
+  String(item?.attendanceOut || '').toLowerCase() === 'auto weekly off' ||
+  String(item?.reason || '').toLowerCase().includes('auto-present');
+
+const normalizeAttendanceForWeeklyOffPolicy = (item, cycle) => {
+  if (!item) return item;
+  const day = String(item.day || '').toLowerCase();
+  if (shouldAutoPresentWeeklyOff(cycle) || !cycle.weeklyOffDays.includes(day) || !isAutoWeeklyOffAttendance(item)) {
+    return item;
+  }
+  const record = typeof item.toObject === 'function' ? item.toObject() : { ...item };
+  return {
+    ...record,
+    present: false,
+    status: 'Weekly Off',
+    timeStatus: 'Weekly Off',
+    attendanceIn: '-',
+    attendanceOut: '-',
+    late: '-',
+    totalHours: '-',
+    reason: `${record.day || 'Day'} weekly off by master salary rule`,
+  };
+};
+
 const dateFromAttendanceParts = item => new Date(Number(item.year), Number(item.month) - 1, Number(item.date));
 
 const attendanceCyclePayload = cycle => ({
@@ -531,6 +558,9 @@ const attendanceCyclePayload = cycle => ({
   startDate: formatIsoDate(cycle.startDate),
   endDate: formatIsoDate(cycle.endDate),
   weeklyOffDays: cycle.weeklyOffDays,
+  openDaysInMonth: cycle.openDaysInMonth,
+  fixedPaidDays: cycle.fixedPaidDays,
+  shouldAutoPresentWeeklyOff: shouldAutoPresentWeeklyOff(cycle),
 });
 
 const buildUserQuery = (query = {}, forcedType) => {
@@ -871,7 +901,7 @@ class UserController {
       }
     }
     const cycleDates = dateRange(cycle.startDate, effectiveEndDate);
-    const shouldPayWeeklyOff = cycle.openDaysInMonth >= 30;
+    const shouldPayWeeklyOff = shouldAutoPresentWeeklyOff(cycle);
     const cycleStartIso = formatIsoDate(cycle.startDate);
     const cycleEndIso = formatIsoDate(effectiveEndDate);
     const fullCycleEndIso = formatIsoDate(cycle.endDate);
@@ -1127,10 +1157,10 @@ class UserController {
           day,
           status,
           timeStatus,
-          reason: record?.reason || reason,
-          attendanceIn: record?.attendanceIn || (shouldPayWeeklyOff && isWeeklyOff ? 'Auto Weekly Off' : '-'),
-          attendanceOut: record?.attendanceOut || (shouldPayWeeklyOff && isWeeklyOff ? 'Auto Weekly Off' : '-'),
-          totalHours: totalHours || record?.totalHours || (shouldPayWeeklyOff && isWeeklyOff ? '0' : '-'),
+          reason: !shouldPayWeeklyOff && isWeeklyOff ? reason : record?.reason || reason,
+          attendanceIn: !shouldPayWeeklyOff && isWeeklyOff ? '-' : record?.attendanceIn || (shouldPayWeeklyOff && isWeeklyOff ? 'Auto Weekly Off' : '-'),
+          attendanceOut: !shouldPayWeeklyOff && isWeeklyOff ? '-' : record?.attendanceOut || (shouldPayWeeklyOff && isWeeklyOff ? 'Auto Weekly Off' : '-'),
+          totalHours: !shouldPayWeeklyOff && isWeeklyOff ? '-' : totalHours || record?.totalHours || (shouldPayWeeklyOff && isWeeklyOff ? '0' : '-'),
           payableDays: dayValue,
         };
       });
@@ -1961,7 +1991,7 @@ checkOutEmployeeAttendance = async (req, res, next) => {
               const resp = (records || []).filter(item => {
                 const itemDate = dateFromAttendanceParts(item);
                 return itemDate >= cycle.startDate && itemDate <= cycle.endDate;
-              });
+              }).map(item => normalizeAttendanceForWeeklyOffPolicy(item, cycle));
 
               return res.json({
                 success: true,
@@ -1970,8 +2000,12 @@ checkOutEmployeeAttendance = async (req, res, next) => {
               });
             }
 
-            const resp = await attendanceService.findAllAttendance(data);
+            let resp = await attendanceService.findAllAttendance(data);
             if(!resp) return next(ErrorHandler.notFound('No Attendance found'));
+            if (year && month) {
+              const cycle = await getAttendanceCycleSettings(year, month);
+              resp = (resp || []).map(item => normalizeAttendanceForWeeklyOffPolicy(item, cycle));
+            }
 
             res.json({success:true,data:resp});
             
