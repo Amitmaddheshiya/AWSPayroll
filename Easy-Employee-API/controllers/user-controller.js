@@ -244,6 +244,12 @@ const buildBankSalaryRows = payload => [
     'TDS Monthly',
     'Total Deductions',
     'Final Salary Paid',
+    'Salary Till Date',
+    'Attendance Payable Days',
+    'Weekly Off Days',
+    'Weekly Off Paid Days',
+    'Weekly Off Unpaid Days',
+    'Holiday Paid Days',
   ],
   ...(payload.data || []).map(item => [
     item.name,
@@ -274,6 +280,12 @@ const buildBankSalaryRows = payload => [
     item.deductions?.tdsMonthly || 0,
     item.deductions?.totalDeductions || 0,
     item.totalPay || 0,
+    item.salaryTillDate || 0,
+    item.attendancePayableDays || 0,
+    item.weeklyOffDays || 0,
+    item.weeklyOffPaidDays || 0,
+    item.weeklyOffUnpaidDays || 0,
+    item.holidayPaidDays || 0,
   ]),
 ];
 
@@ -334,17 +346,17 @@ const hoursBetweenTimes = (start, end) => {
   return Number((diff / 60).toFixed(2));
 };
 
-const timeStatusFromHours = (day, totalHours, status = '') => {
+const timeStatusFromHours = (day, totalHours, status = '', minimumFullDayHours = 7) => {
   const dayLower = String(day || '').toLowerCase();
   const statusLower = String(status || '').toLowerCase();
   if (statusLower === 'approved leave' || statusLower === 'leave') return 'Full Time';
   if (dayLower === 'sunday') return 'Holiday';
   if (dayLower === 'saturday') return totalHours > 0 ? 'Full Time' : '-';
-  return Number(totalHours || 0) >= 7 ? 'Full Time' : 'Half Time';
+  return Number(totalHours || 0) >= Number(minimumFullDayHours || 7) ? 'Full Time' : 'Half Time';
 };
 
-const attendanceStatusFromTime = (day, totalHours, status = '') => {
-  const timeStatus = timeStatusFromHours(day, totalHours, status);
+const attendanceStatusFromTime = (day, totalHours, status = '', minimumFullDayHours = 7) => {
+  const timeStatus = timeStatusFromHours(day, totalHours, status, minimumFullDayHours);
   if (timeStatus === 'Half Time') return 'Half Day';
   if (timeStatus === 'Holiday') return 'Holiday';
   if (timeStatus === 'Full Time') return status === 'Approved Leave' ? 'Approved Leave' : 'Present';
@@ -502,25 +514,7 @@ const resolveSalaryCycleRequest = async (requestedYear, requestedMonth, today) =
 
 const getAttendanceCycleSettings = async (year, month) => {
   const salaryCycle = await getPayrollCycleSettings(year, month);
-  const startDate = new Date(
-    year,
-    month - 1,
-    clampDayToMonth(year, month, salaryCycle.startDay),
-  );
-  const endMonthDate = salaryCycle.startDay <= salaryCycle.endDay
-    ? new Date(year, month - 1, 1)
-    : new Date(year, month, 1);
-  const endDate = new Date(
-    endMonthDate.getFullYear(),
-    endMonthDate.getMonth(),
-    clampDayToMonth(endMonthDate.getFullYear(), endMonthDate.getMonth() + 1, salaryCycle.endDay),
-  );
-
-  return {
-    ...salaryCycle,
-    startDate,
-    endDate,
-  };
+  return salaryCycle;
 };
 
 const shouldAutoPresentWeeklyOff = cycle => Number(cycle?.fixedPaidDays ?? cycle?.openDaysInMonth) === 30;
@@ -562,6 +556,104 @@ const attendanceCyclePayload = cycle => ({
   fixedPaidDays: cycle.fixedPaidDays,
   shouldAutoPresentWeeklyOff: shouldAutoPresentWeeklyOff(cycle),
 });
+
+const ensureAutoAttendanceForCycle = async ({ cycle, cycleDates, users, approvedLeaves }) => {
+  const paidHolidayDates = cycleDates.filter(dateObj =>
+    cycle.paidHolidayDates.includes(formatIsoDate(dateObj).toLowerCase())
+  );
+  if (paidHolidayDates.length) {
+    await Promise.all(users.flatMap(user =>
+      paidHolidayDates.map(dateObj => {
+        const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+        return Attendance.findOneAndUpdate(
+          { employeeID: user._id, year: dateObj.getFullYear(), month: dateObj.getMonth() + 1, date: dateObj.getDate() },
+          {
+            $set: {
+              employeeID: user._id,
+              year: dateObj.getFullYear(),
+              month: dateObj.getMonth() + 1,
+              date: dateObj.getDate(),
+              day,
+              present: true,
+              status: 'Present',
+              attendanceIn: 'Paid Holiday',
+              attendanceOut: 'Paid Holiday',
+              late: 'No',
+              totalHours: '0',
+              timeStatus: 'Full Time',
+              reason: 'Paid holiday by master salary rule',
+            },
+          },
+          { upsert: true, new: true },
+        );
+      })
+    ));
+  }
+
+  await Promise.all((approvedLeaves || []).flatMap(leave =>
+    cycleDates
+      .filter(dateObj => {
+        const isoDate = formatIsoDate(dateObj);
+        return leave.startDate <= isoDate && leave.endDate >= isoDate;
+      })
+      .map(dateObj => {
+        const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+        return Attendance.findOneAndUpdate(
+          { employeeID: leave.applicantID, year: dateObj.getFullYear(), month: dateObj.getMonth() + 1, date: dateObj.getDate() },
+          {
+            $set: {
+              employeeID: leave.applicantID,
+              year: dateObj.getFullYear(),
+              month: dateObj.getMonth() + 1,
+              date: dateObj.getDate(),
+              day,
+              present: true,
+              status: 'Approved Leave',
+              attendanceIn: 'Approved Leave',
+              attendanceOut: 'Approved Leave',
+              late: 'No',
+              totalHours: '0',
+              timeStatus: 'Full Time',
+              reason: `Approved leave: ${leave.type || leave.title || 'Leave'}`,
+            },
+          },
+          { upsert: true, new: true },
+        );
+      })
+  ));
+
+  if (!shouldAutoPresentWeeklyOff(cycle)) return;
+  const weeklyOffDates = cycleDates.filter(dateObj => {
+    const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+    return cycle.weeklyOffDays.includes(day);
+  });
+  await Promise.all(users.flatMap(user =>
+    weeklyOffDates.map(dateObj => {
+      const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+      return Attendance.findOneAndUpdate(
+        { employeeID: user._id, year: dateObj.getFullYear(), month: dateObj.getMonth() + 1, date: dateObj.getDate() },
+        {
+          $set: {
+            employeeID: user._id,
+            year: dateObj.getFullYear(),
+            month: dateObj.getMonth() + 1,
+            date: dateObj.getDate(),
+            day,
+            present: true,
+            status: 'Present',
+            attendanceIn: 'Auto Weekly Off',
+            attendanceOut: 'Auto Weekly Off',
+            late: 'No',
+            totalHours: '0',
+            timeStatus: 'Full Time',
+            reason: `${day} auto-present because fixed paid days is ${cycle.openDaysInMonth}`,
+          },
+        },
+        { upsert: true, new: true },
+      );
+    })
+  ));
+};
 
 const buildUserQuery = (query = {}, forcedType) => {
   const filter = {};
@@ -951,7 +1043,7 @@ class UserController {
           const saved = await Attendance.findOneAndUpdate(
             { employeeID: user._id, year: dateYear, month: dateMonth, date: dayNumber },
             {
-              $setOnInsert: {
+              $set: {
                 employeeID: user._id,
                 year: dateYear,
                 month: dateMonth,
@@ -991,7 +1083,7 @@ class UserController {
           const saved = await Attendance.findOneAndUpdate(
             { employeeID: leave.applicantID, year: dateYear, month: dateMonth, date: dayNumber },
             {
-              $setOnInsert: {
+              $set: {
                 employeeID: leave.applicantID,
                 year: dateYear,
                 month: dateMonth,
@@ -1126,8 +1218,8 @@ class UserController {
           }
         } else if (record?.present) {
           totalHours = toNumber(record.totalHours) || hoursBetweenTimes(record.attendanceIn, record.attendanceOut);
-          timeStatus = record.timeStatus || timeStatusFromHours(day, totalHours, record.status);
-          status = record.status || attendanceStatusFromTime(day, totalHours, record.status);
+          timeStatus = record.timeStatus || timeStatusFromHours(day, totalHours, record.status, cycle.halfTimeMinimumHours);
+          status = record.status || attendanceStatusFromTime(day, totalHours, record.status, cycle.halfTimeMinimumHours);
           if (totalHours > 0 && totalHours < cycle.halfTimeMinimumHours && status !== 'Approved Leave') {
             timeStatus = 'Half Time';
             status = 'Half Day';
@@ -1173,7 +1265,6 @@ class UserController {
         ? approvedExpenseItems.reduce((sum, item) => sum + toNumber(item.amount), 0)
         : 0;
       const cappedPayableDays = Math.min(payableDays, cycle.openDaysInMonth);
-      const payrollAbsentDays = Number(Math.max(cycle.openDaysInMonth - cappedPayableDays, 0).toFixed(2));
       const salaryTillDate = Number((cappedPayableDays * perDaySalary).toFixed(2));
       const totalPay = Number((salaryTillDate + totalExpenses).toFixed(2));
 
@@ -1219,7 +1310,7 @@ class UserController {
         weeklyOffUnpaidDays,
         weeklyOffDays,
         holidayPaidDays,
-        absentDays: payrollAbsentDays,
+        absentDays,
         attendanceAbsentDays: absentDays,
         salaryTillDate,
         totalExpenses,
@@ -1924,6 +2015,7 @@ checkOutEmployeeAttendance = async (req, res, next) => {
     const year = d.getFullYear();
     const month = d.getMonth() + 1;
     const date = d.getDate();
+    const cycle = await getPayrollCycleSettings(year, month);
 
     const record = await attendanceService.findTodayAttendance(
       employeeID,
@@ -1946,7 +2038,7 @@ checkOutEmployeeAttendance = async (req, res, next) => {
 
     // ✅ Calculate total hours as decimal
     const totalHours = hoursBetweenTimes(record.attendanceIn, attendanceOut).toFixed(2);
-    const timeStatus = timeStatusFromHours(record.day, Number(totalHours), record.status);
+    const timeStatus = timeStatusFromHours(record.day, Number(totalHours), record.status, cycle.halfTimeMinimumHours);
     const status = timeStatus === "Half Time" ? "Half Day" : record.status === "Approved Leave" ? "Approved Leave" : "Present";
 
     const updated = await attendanceService.updateAttendanceOut(record._id, {
@@ -1954,7 +2046,7 @@ checkOutEmployeeAttendance = async (req, res, next) => {
       totalHours,
       timeStatus,
       status,
-      reason: timeStatus === "Half Time" ? "Worked less than 7 hours" : record.reason,
+      reason: timeStatus === "Half Time" ? `Worked less than ${cycle.halfTimeMinimumHours} hours` : record.reason,
       checkOutLocation: attendanceLocationPayload(
         latitude,
         longitude,
@@ -1980,6 +2072,33 @@ checkOutEmployeeAttendance = async (req, res, next) => {
             if (year && month && !data.date) {
               const cycle = await getAttendanceCycleSettings(year, month);
               const rangeQuery = monthYearPairsForRange(cycle.startDate, cycle.endDate);
+              const today = normalizeDateOnly(new Date());
+              const autoEndDate = today < cycle.startDate
+                ? null
+                : (today < cycle.endDate ? today : cycle.endDate);
+              if (autoEndDate) {
+                const employeeFilter = data.employeeID && mongoose.Types.ObjectId.isValid(data.employeeID)
+                  ? { _id: data.employeeID }
+                  : { type: { $in: ['employee', 'leader'] }, status: { $ne: 'deleted' } };
+                const autoCycleDates = dateRange(cycle.startDate, autoEndDate);
+                const cycleStartIso = formatIsoDate(cycle.startDate);
+                const cycleEndIso = formatIsoDate(autoEndDate);
+                const [autoUsers, autoLeaves] = await Promise.all([
+                  User.find(employeeFilter).select('_id'),
+                  Leave.find({
+                    adminResponse: 'Approved',
+                    startDate: { $lte: cycleEndIso },
+                    endDate: { $gte: cycleStartIso },
+                    ...(data.employeeID && mongoose.Types.ObjectId.isValid(data.employeeID) ? { applicantID: data.employeeID } : {}),
+                  }),
+                ]);
+                await ensureAutoAttendanceForCycle({
+                  cycle,
+                  cycleDates: autoCycleDates,
+                  users: autoUsers,
+                  approvedLeaves: autoLeaves,
+                });
+              }
               const query = {
                 ...data,
                 $or: rangeQuery,
@@ -2096,7 +2215,7 @@ updateEmployeeAttendance = async (req, res, next) => {
     if (!bodyTimeStatus) {
       if (d === "sunday") timeStatus = "Holiday";
       else if (d === "saturday") timeStatus = totalHours > 0 ? "Full Time" : "-";
-      else timeStatus = totalHours >= 7 ? "Full Time" : "Half Time";
+      else timeStatus = totalHours >= cycle.halfTimeMinimumHours ? "Full Time" : "Half Time";
     }
     if (status === "Half Day") timeStatus = "Half Time";
     if (status === "Present" && bodyTimeStatus === "Full Time") timeStatus = "Full Time";
@@ -2108,7 +2227,7 @@ updateEmployeeAttendance = async (req, res, next) => {
       totalHours: totalHours.toFixed(2),
       late: bodyLate || isLate,
       timeStatus,
-      reason: timeStatus === "Half Time" ? "Worked less than 7 hours" : req.body.reason || "",
+      reason: timeStatus === "Half Time" ? `Worked less than ${cycle.halfTimeMinimumHours} hours` : req.body.reason || "",
       present: true,
       status: status === "Half Day" || timeStatus === "Half Time" ? "Half Day" : "Present",
       date,
