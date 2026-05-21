@@ -888,63 +888,42 @@ const attendanceLocationPayload = (latitude, longitude, accuracy, distanceMeters
 
 
 class UserController {
-  annualPayrollDataCleanup = async () => {
-    const today = normalizeDateOnly(new Date());
-    const todayIso = formatIsoDate(today);
-    const masterPolicy = await getMasterSalaryPolicy();
-    const rules = masterPolicy?.rules?.length ? masterPolicy.rules : fallbackMasterSalaryRules;
-    const annualStart = parseDayMonthRule(
-      getRuleValue(rules, ['Annual Start Date', 'Annual Start Day Month', 'Annual Data Reset Date'], ''),
-    );
-
-    if (!annualStart) return { skipped: true, reason: 'Annual start date not configured' };
-    if (today.getDate() !== annualStart.day || today.getMonth() + 1 !== annualStart.month) {
-      return { skipped: true, reason: 'Today is not annual cleanup date' };
-    }
-    if (masterPolicy?.meta?.lastAnnualCleanupDate === todayIso) {
-      return { skipped: true, reason: 'Annual cleanup already completed today' };
-    }
-
-    const year = today.getFullYear();
-    const month = today.getMonth() + 1;
-    const date = today.getDate();
-    const attendanceFilter = {
-      $or: [
-        { year: { $lt: year } },
-        { year, month: { $lt: month } },
-        { year, month, date: { $lt: date } },
-      ],
-    };
-
+  getManualDeleteSummary = async (req, res, next) => {
     const [attendance, leaves, expenses] = await Promise.all([
-      Attendance.deleteMany(attendanceFilter),
-      Leave.deleteMany({ endDate: { $lt: todayIso } }),
-      Expense.deleteMany({ appliedDate: { $lt: todayIso } }),
+      Attendance.countDocuments(),
+      Leave.countDocuments(),
+      Expense.countDocuments(),
     ]);
 
-    if (masterPolicy?._id) {
-      await PayrollPolicy.updateOne(
-        { _id: masterPolicy._id },
-        {
-          $set: {
-            'meta.lastAnnualCleanupDate': todayIso,
-            'meta.lastAnnualCleanupSummary': {
-              attendanceDeleted: attendance.deletedCount || 0,
-              leavesDeleted: leaves.deletedCount || 0,
-              expensesDeleted: expenses.deletedCount || 0,
-            },
-          },
-        },
-      );
+    res.json({
+      success: true,
+      data: {
+        attendance,
+        leaves,
+        expenses,
+      },
+    });
+  }
+
+  manualDeleteServerData = async (req, res, next) => {
+    const type = String(req.params.type || '').trim().toLowerCase();
+    const deleteMap = {
+      attendance: () => Attendance.deleteMany({}),
+      leaves: () => Leave.deleteMany({}),
+      expenses: () => Expense.deleteMany({}),
+    };
+
+    if (!deleteMap[type]) {
+      return next(ErrorHandler.badRequest('Invalid delete type'));
     }
 
-    return {
+    const result = await deleteMap[type]();
+    res.json({
       success: true,
-      date: todayIso,
-      attendanceDeleted: attendance.deletedCount || 0,
-      leavesDeleted: leaves.deletedCount || 0,
-      expensesDeleted: expenses.deletedCount || 0,
-    };
+      type,
+      deletedCount: result.deletedCount || 0,
+      message: `${result.deletedCount || 0} ${type} records deleted successfully`,
+    });
   }
 
   getCompanySettings = async (req, res, next) => {

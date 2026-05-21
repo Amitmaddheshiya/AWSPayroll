@@ -22,6 +22,7 @@ import {AdminAttendanceScreen} from '../features/admin/AdminAttendanceScreen';
 import {AdminHomeScreen} from '../features/admin/AdminHomeScreen';
 import {AdminExpensesScreen} from '../features/admin/AdminExpensesScreen';
 import {AdminLeavesScreen} from '../features/admin/AdminLeavesScreen';
+import {AdminManualDeleteScreen} from '../features/admin/AdminManualDeleteScreen';
 import {AdminMenuScreen} from '../features/admin/AdminMenuScreen';
 import {AdminOfficeLocationScreen} from '../features/admin/AdminOfficeLocationScreen';
 import {AdminPeopleScreen} from '../features/admin/AdminPeopleScreen';
@@ -130,6 +131,7 @@ const AdminStack = () => (
     <AdminStackNavigator.Screen name="AdminSalaries" component={AdminSalaryScreen} options={{title: 'Salaries'}} />
     <AdminStackNavigator.Screen name="AdminMonthlySalaries" component={AdminMonthlySalaryScreen} options={{title: 'Monthly Salaries'}} />
     <AdminStackNavigator.Screen name="AdminPolicies" component={AdminPoliciesScreen} options={{title: 'Payroll Policies'}} />
+    <AdminStackNavigator.Screen name="AdminManualDelete" component={AdminManualDeleteScreen} options={{title: 'Manual Delete'}} />
     <AdminStackNavigator.Screen name="AdminSettings" component={AdminSettingsScreen} options={{title: 'Settings'}} />
     <AdminStackNavigator.Screen name="AdminAddUser" component={AdminAddUserScreen} options={{title: 'Add Employee'}} />
     <AdminStackNavigator.Screen name="AdminAddTeam" component={AdminAddTeamScreen} options={{title: 'Add Team'}} />

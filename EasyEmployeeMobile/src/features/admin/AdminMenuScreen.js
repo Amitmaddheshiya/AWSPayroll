@@ -11,6 +11,7 @@ import {
   Plus,
   ReceiptText,
   Settings,
+  Trash2,
   UserPlus,
   Users,
   WalletCards,
@@ -37,6 +38,7 @@ export const AdminMenuScreen = ({navigation}) => {
           {label: 'Expenses', caption: 'Approve or reject expense', icon: ReceiptText, onPress: () => navigation.navigate('AdminExpenses')},
           {label: 'Office Location', caption: 'Check-in radius and office coordinates', icon: MapPin, onPress: () => navigation.navigate('AdminOfficeLocation')},
           {label: 'Payroll Policies', caption: 'Master salary and payroll rules', icon: FileText, onPress: () => navigation.navigate('AdminPolicies')},
+          {label: 'Manual Delete', caption: 'Delete attendance, expenses, or leaves', icon: Trash2, onPress: () => navigation.navigate('AdminManualDelete')},
           {label: 'Settings', caption: 'Theme and preferences', icon: Settings, onPress: () => navigation.navigate('AdminSettings')},
           {label: 'Contact Us', caption: 'Support details', icon: Info, onPress: () => openInfo('Contact Us', 'Amit Web Solution Company\nEmail: amitwebsolutioncompany@gmail.com\nPhone: 8574700615\n\nSupport: report payroll, attendance, leave, salary slip, or login issues with employee ID and screenshots.\nApp Version: 1.0.0')},
         ]}

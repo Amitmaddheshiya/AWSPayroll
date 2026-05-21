@@ -10,6 +10,8 @@ router.post("/payslip/send-email", sendPayslipEmail);
 
 // existing imports at top
 router.get('/dashboard', asyncMiddleware(userController.getAdminDashboard));
+router.get('/manual-delete-summary', asyncMiddleware(userController.getManualDeleteSummary));
+router.delete('/manual-delete/:type', asyncMiddleware(userController.manualDeleteServerData));
 router.get('/company-settings', asyncMiddleware(userController.getCompanySettings));
 router.patch('/company-settings', asyncMiddleware(userController.updateCompanySettings));
 router.get('/office-locations', asyncMiddleware(userController.getOfficeLocations));
