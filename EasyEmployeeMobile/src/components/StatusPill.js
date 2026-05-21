@@ -1,29 +1,31 @@
 import React from 'react';
 import {StyleSheet, Text} from 'react-native';
-import {colors} from '../theme/colors';
-
-const toneMap = {
-  Approved: colors.success,
-  Pending: colors.primary,
-  Rejected: colors.danger,
-  Present: colors.success,
-  Completed: colors.success,
-  'Checked In': colors.info,
-  'Checked Out': colors.success,
-  'Full Time': colors.success,
-  'Half Day': colors.warning,
-  'Half Time': colors.warning,
-  Leave: colors.info,
-  'Approved Leave': colors.info,
-  'Weekly Off': colors.warning,
-  Holiday: colors.gold,
-  Absent: colors.danger,
-  Late: colors.warning,
-  Yes: colors.danger,
-  No: colors.success,
-};
+import {useSelector} from 'react-redux';
+import {getThemeColors} from '../theme/colors';
 
 export const StatusPill = ({value}) => {
+  const themeMode = useSelector(state => state.ui.themeMode);
+  const colors = getThemeColors(themeMode);
+  const toneMap = {
+    Approved: colors.success,
+    Pending: colors.primary,
+    Rejected: colors.danger,
+    Present: colors.success,
+    Completed: colors.success,
+    'Checked In': colors.info,
+    'Checked Out': colors.success,
+    'Full Time': colors.success,
+    'Half Day': colors.warning,
+    'Half Time': colors.warning,
+    Leave: colors.info,
+    'Approved Leave': colors.info,
+    'Weekly Off': colors.warning,
+    Holiday: colors.gold,
+    Absent: colors.danger,
+    Late: colors.warning,
+    Yes: colors.danger,
+    No: colors.success,
+  };
   const normalized = String(value || '').trim();
   const lower = normalized.toLowerCase();
   const tone =

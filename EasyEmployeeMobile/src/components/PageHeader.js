@@ -11,8 +11,8 @@ export const PageHeader = ({eyebrow, title, subtitle, right}) => {
     <View style={[styles.header, {backgroundColor: colors.ink || colors.text, borderColor: colors.gold || colors.primary}]}>
       <View style={styles.copy}>
         {eyebrow ? <Text style={[styles.eyebrow, {color: colors.gold || colors.primary}]}>{eyebrow}</Text> : null}
-        <Text style={[styles.title, {color: colors.surface}]}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        <Text style={[styles.title, {color: '#ffffff'}]}>{title}</Text>
+        {subtitle ? <Text style={[styles.subtitle, {color: '#dfd4c2'}]}>{subtitle}</Text> : null}
       </View>
       {right ? <View style={styles.right}>{right}</View> : null}
     </View>
@@ -47,7 +47,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   subtitle: {
-    color: '#dfd4c2',
     lineHeight: 20,
     marginTop: spacing.xs,
   },

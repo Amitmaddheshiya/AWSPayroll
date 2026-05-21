@@ -6,19 +6,21 @@ import {Card} from '../../components/Card';
 import {EmptyState} from '../../components/EmptyState';
 import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
-import {colors} from '../../theme/colors';
+import {getThemeColors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
 import {formatCurrency} from '../../utils/money';
 
-const MoneyRow = ({label, value}) => (
-  <View style={styles.row}>
-    <Text style={styles.label}>{label}</Text>
-    <Text style={styles.value}>{formatCurrency(value)}</Text>
+const MoneyRow = ({label, value, colors}) => (
+  <View style={[styles.row, {borderBottomColor: colors.border}]}>
+    <Text style={[styles.label, {color: colors.textMuted}]}>{label}</Text>
+    <Text style={[styles.value, {color: colors.text}]}>{formatCurrency(value)}</Text>
   </View>
 );
 
 export const SalaryScreen = () => {
   const {user} = useSelector(state => state.auth);
+  const themeMode = useSelector(state => state.ui.themeMode);
+  const colors = getThemeColors(themeMode);
   const [salary, setSalary] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -64,33 +66,33 @@ export const SalaryScreen = () => {
         subtitle="Assigned earnings, deductions, and net pay structure."
       />
       <Card>
-        <Text style={styles.title}>Net Pay</Text>
-        <Text style={styles.subtitle}>{month || '-'} / {year || '-'} | Assigned {assignedDate || '-'}</Text>
-        <Text style={styles.netPay}>{formatCurrency(netPay)}</Text>
-        <Text style={styles.subtitle}>Net pay</Text>
+        <Text style={[styles.title, {color: colors.text}]}>Net Pay</Text>
+        <Text style={[styles.subtitle, {color: colors.textMuted}]}>{month || '-'} / {year || '-'} | Assigned {assignedDate || '-'}</Text>
+        <Text style={[styles.netPay, {color: colors.success}]}>{formatCurrency(netPay)}</Text>
+        <Text style={[styles.subtitle, {color: colors.textMuted}]}>Net pay</Text>
       </Card>
 
       <Card>
-        <Text style={styles.section}>Earnings</Text>
-        <MoneyRow label="Basic" value={earnings.basic} />
-        <MoneyRow label="HRA" value={earnings.hra} />
-        <MoneyRow label="Conveyance" value={earnings.conveyance} />
-        <MoneyRow label="Medical" value={earnings.medical} />
-        <MoneyRow label="Special Allowance" value={earnings.specialAllowance} />
-        <MoneyRow label="Overtime Pay" value={earnings.overtimePay} />
-        <MoneyRow label="Bonus" value={earnings.bonus} />
-        <MoneyRow label="Other Benefits" value={earnings.otherBenefits} />
-        <MoneyRow label="Gross" value={earnings.gross} />
+        <Text style={[styles.section, {color: colors.text}]}>Earnings</Text>
+        <MoneyRow colors={colors} label="Basic" value={earnings.basic} />
+        <MoneyRow colors={colors} label="HRA" value={earnings.hra} />
+        <MoneyRow colors={colors} label="Conveyance" value={earnings.conveyance} />
+        <MoneyRow colors={colors} label="Medical" value={earnings.medical} />
+        <MoneyRow colors={colors} label="Special Allowance" value={earnings.specialAllowance} />
+        <MoneyRow colors={colors} label="Overtime Pay" value={earnings.overtimePay} />
+        <MoneyRow colors={colors} label="Bonus" value={earnings.bonus} />
+        <MoneyRow colors={colors} label="Other Benefits" value={earnings.otherBenefits} />
+        <MoneyRow colors={colors} label="Gross" value={earnings.gross} />
       </Card>
 
       <Card>
-        <Text style={styles.section}>Deductions</Text>
-        <MoneyRow label="PF Employee" value={deductions.pfEmployee} />
-        <MoneyRow label="ESI Employee" value={deductions.esiEmployee} />
-        <MoneyRow label="Professional Tax" value={deductions.professionalTax} />
-        <MoneyRow label="Loan Recovery" value={deductions.loanRecovery} />
-        <MoneyRow label="TDS Monthly" value={deductions.tdsMonthly} />
-        <MoneyRow label="Total Deductions" value={deductions.totalDeductions} />
+        <Text style={[styles.section, {color: colors.text}]}>Deductions</Text>
+        <MoneyRow colors={colors} label="PF Employee" value={deductions.pfEmployee} />
+        <MoneyRow colors={colors} label="ESI Employee" value={deductions.esiEmployee} />
+        <MoneyRow colors={colors} label="Professional Tax" value={deductions.professionalTax} />
+        <MoneyRow colors={colors} label="Loan Recovery" value={deductions.loanRecovery} />
+        <MoneyRow colors={colors} label="TDS Monthly" value={deductions.tdsMonthly} />
+        <MoneyRow colors={colors} label="Total Deductions" value={deductions.totalDeductions} />
       </Card>
     </Screen>
   );
@@ -98,28 +100,23 @@ export const SalaryScreen = () => {
 
 const styles = StyleSheet.create({
   title: {
-    color: colors.text,
     fontSize: 20,
     fontWeight: '900',
   },
   subtitle: {
-    color: colors.textMuted,
     marginTop: spacing.xs,
   },
   netPay: {
-    color: colors.success,
     fontSize: 32,
     fontWeight: '900',
     marginTop: spacing.lg,
   },
   section: {
-    color: colors.text,
     fontSize: 17,
     fontWeight: '900',
     marginBottom: spacing.md,
   },
   row: {
-    borderBottomColor: colors.border,
     borderBottomWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -127,11 +124,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   label: {
-    color: colors.textMuted,
     flex: 1,
   },
   value: {
-    color: colors.text,
     fontWeight: '800',
   },
 });

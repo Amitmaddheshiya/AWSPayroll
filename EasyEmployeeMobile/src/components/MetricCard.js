@@ -1,24 +1,28 @@
 import React from 'react';
 import {StyleSheet, Text, View} from 'react-native';
-import {colors} from '../theme/colors';
+import {useSelector} from 'react-redux';
+import {getThemeColors} from '../theme/colors';
 import {spacing} from '../theme/spacing';
 import {Card} from './Card';
 
-export const MetricCard = ({label, value, tone = 'primary', icon: Icon}) => (
-  <Card style={styles.card}>
-    <View style={[styles.iconWrap, {backgroundColor: tones[tone] || tones.primary}]}>
-      {Icon ? <Icon color={colors.surface} size={20} /> : null}
-    </View>
-    <Text style={styles.value}>{value ?? '-'}</Text>
-    <Text style={styles.label}>{label}</Text>
-  </Card>
-);
-
-const tones = {
-  primary: colors.primary,
-  success: colors.success,
-  warning: colors.warning,
-  info: colors.info,
+export const MetricCard = ({label, value, tone = 'primary', icon: Icon}) => {
+  const themeMode = useSelector(state => state.ui.themeMode);
+  const colors = getThemeColors(themeMode);
+  const tones = {
+    primary: colors.primary,
+    success: colors.success,
+    warning: colors.warning,
+    info: colors.info,
+  };
+  return (
+    <Card style={styles.card}>
+      <View style={[styles.iconWrap, {backgroundColor: tones[tone] || tones.primary}]}>
+        {Icon ? <Icon color={colors.surface} size={20} /> : null}
+      </View>
+      <Text style={[styles.value, {color: colors.text}]}>{value ?? '-'}</Text>
+      <Text style={[styles.label, {color: colors.textMuted}]}>{label}</Text>
+    </Card>
+  );
 };
 
 const styles = StyleSheet.create({
@@ -36,12 +40,10 @@ const styles = StyleSheet.create({
     width: 38,
   },
   value: {
-    color: colors.text,
     fontSize: 20,
     fontWeight: '900',
   },
   label: {
-    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '700',
     marginTop: spacing.xs,

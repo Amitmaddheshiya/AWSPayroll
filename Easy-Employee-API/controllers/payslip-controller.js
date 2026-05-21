@@ -17,7 +17,7 @@ export const sendPayslipEmail = async (req, res) => {
     });
 
     await transporter.sendMail({
-      from: `"NextView Payroll" <${process.env.EMAIL_USER}>`,
+      from: `"AWSPayroll" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: subject || "Employee Payslip",
       html,

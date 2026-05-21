@@ -6,11 +6,13 @@ import {getEmployeeTeam, getEmployeeTeamMembers} from '../../api/employeeApi';
 import {Card} from '../../components/Card';
 import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
-import {colors} from '../../theme/colors';
+import {getThemeColors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
 
 export const EmployeeTeamsScreen = () => {
   const {user} = useSelector(state => state.auth);
+  const themeMode = useSelector(state => state.ui.themeMode);
+  const colors = getThemeColors(themeMode);
   const [team, setTeam] = useState(null);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -49,19 +51,19 @@ export const EmployeeTeamsScreen = () => {
         title="My Team"
         subtitle="Leader and member details for your current team assignment."
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, {color: colors.danger}]}>{error}</Text> : null}
       {team ? (
         <Card>
-          <Text style={styles.title}>{team.name || 'Team'}</Text>
-          <Text style={styles.meta}>{team.description || '-'}</Text>
-          <Text style={styles.meta}>Leader: {team.leader?.name || '-'}</Text>
+          <Text style={[styles.title, {color: colors.text}]}>{team.name || 'Team'}</Text>
+          <Text style={[styles.meta, {color: colors.textMuted}]}>{team.description || '-'}</Text>
+          <Text style={[styles.meta, {color: colors.textMuted}]}>Leader: {team.leader?.name || '-'}</Text>
         </Card>
       ) : null}
       {members.map(member => (
         <Card key={member.id || member._id}>
-          <Text style={styles.title}>{member.name || member.username || '-'}</Text>
-          <Text style={styles.meta}>{member.email || '-'}</Text>
-          <Text style={styles.meta}>{member.mobile || '-'}</Text>
+          <Text style={[styles.title, {color: colors.text}]}>{member.name || member.username || '-'}</Text>
+          <Text style={[styles.meta, {color: colors.textMuted}]}>{member.email || '-'}</Text>
+          <Text style={[styles.meta, {color: colors.textMuted}]}>{member.mobile || '-'}</Text>
         </Card>
       ))}
       {!team && !loading && !error ? (
@@ -69,8 +71,8 @@ export const EmployeeTeamsScreen = () => {
           <View style={styles.iconWrap}>
             <UsersRound color={colors.primary} size={26} />
           </View>
-          <Text style={styles.emptyTitle}>Team assignment pending</Text>
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyTitle, {color: colors.text}]}>Team assignment pending</Text>
+          <Text style={[styles.emptyText, {color: colors.textMuted}]}>
             Your workspace is ready. Once admin assigns you to a team, members and leader details will appear here.
           </Text>
         </Card>
@@ -80,9 +82,9 @@ export const EmployeeTeamsScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  title: {color: colors.text, fontSize: 17, fontWeight: '900'},
-  meta: {color: colors.textMuted, marginTop: spacing.xs},
-  error: {color: colors.danger},
+  title: {fontSize: 17, fontWeight: '900'},
+  meta: {marginTop: spacing.xs},
+  error: {},
   emptyCard: {alignItems: 'center', paddingVertical: spacing.xl},
   iconWrap: {
     alignItems: 'center',
@@ -93,6 +95,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     width: 58,
   },
-  emptyTitle: {color: colors.text, fontSize: 18, fontWeight: '900', textAlign: 'center'},
-  emptyText: {color: colors.textMuted, lineHeight: 22, marginTop: spacing.sm, textAlign: 'center'},
+  emptyTitle: {fontSize: 18, fontWeight: '900', textAlign: 'center'},
+  emptyText: {lineHeight: 22, marginTop: spacing.sm, textAlign: 'center'},
 });

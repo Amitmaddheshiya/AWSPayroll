@@ -36,4 +36,10 @@ export const darkColors = {
 
 export const getThemeColors = mode => (mode === 'dark' ? darkColors : lightColors);
 
-export const colors = lightColors;
+// Compatibility palette for older static StyleSheet usages. New code should call
+// getThemeColors so colors can follow the Redux theme switch exactly.
+export const colors = {
+  ...lightColors,
+  text: '#76716a',
+  textMuted: '#8d867a',
+};

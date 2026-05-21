@@ -18,26 +18,26 @@ import {
   clearAttendanceMessage,
   loadAttendance,
 } from '../../store/attendanceSlice';
-import {colors} from '../../theme/colors';
+import {getThemeColors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
 import {buildCycleDates, todayParts, formatDisplayDate} from '../../utils/date';
 
-const AttendanceItem = ({item}) => (
+const AttendanceItem = ({item, colors}) => (
   <Card style={styles.item}>
     <View style={styles.itemHeader}>
       <View>
-        <Text style={styles.itemTitle}>{formatDisplayDate(item)}</Text>
-        <Text style={styles.itemSubtitle}>{item.day}</Text>
+        <Text style={[styles.itemTitle, {color: colors.text}]}>{formatDisplayDate(item)}</Text>
+        <Text style={[styles.itemSubtitle, {color: colors.textMuted}]}>{item.day}</Text>
       </View>
       <StatusPill value={item.displayStatus || item.status || (item.present ? 'Present' : 'Absent')} />
     </View>
-    <View style={styles.grid}>
-      <Text style={styles.meta}>In: {item.attendanceIn || '-'}</Text>
-      <Text style={styles.meta}>Out: {item.attendanceOut || '-'}</Text>
-      <Text style={styles.meta}>Late: {item.late || '-'}</Text>
-      <Text style={styles.meta}>Hours: {item.totalHours || '-'}</Text>
-      <Text style={styles.meta}>Status: {item.displayTimeStatus || item.timeStatus || item.displayStatus || item.status || '-'}</Text>
-      <Text style={styles.meta}>Reason: {item.reason || '-'}</Text>
+    <View style={[styles.grid, {borderTopColor: colors.border}]}>
+      <Text style={[styles.meta, {color: colors.textMuted}]}>In: {item.attendanceIn || '-'}</Text>
+      <Text style={[styles.meta, {color: colors.textMuted}]}>Out: {item.attendanceOut || '-'}</Text>
+      <Text style={[styles.meta, {color: colors.textMuted}]}>Late: {item.late || '-'}</Text>
+      <Text style={[styles.meta, {color: colors.textMuted}]}>Hours: {item.totalHours || '-'}</Text>
+      <Text style={[styles.meta, {color: colors.textMuted}]}>Status: {item.displayTimeStatus || item.timeStatus || item.displayStatus || item.status || '-'}</Text>
+      <Text style={[styles.meta, {color: colors.textMuted}]}>Reason: {item.reason || '-'}</Text>
     </View>
   </Card>
 );
@@ -85,6 +85,8 @@ const currentCycleStartParts = (policies, today) => {
 export const AttendanceScreen = () => {
   const dispatch = useDispatch();
   const {user} = useSelector(state => state.auth);
+  const themeMode = useSelector(state => state.ui.themeMode);
+  const colors = getThemeColors(themeMode);
   const {records, cycle, loading, actionLoading, error, message} = useSelector(
     state => state.attendance,
   );
@@ -335,20 +337,20 @@ export const AttendanceScreen = () => {
       />
       <Card>
         <View style={styles.summary}>
-          <Text style={styles.summaryLabel}>This salary cycle</Text>
-          <Text style={styles.summaryValue}>{monthlyCount} present days</Text>
-          <Text style={styles.summarySub}>
+          <Text style={[styles.summaryLabel, {color: colors.textMuted}]}>This salary cycle</Text>
+          <Text style={[styles.summaryValue, {color: colors.text}]}>{monthlyCount} present days</Text>
+          <Text style={[styles.summarySub, {color: colors.textMuted}]}>
             Today: {isWeeklyOffToday ? 'Weekly off' : todayRecord?.attendanceOut ? 'Completed' : todayRecord?.attendanceIn ? 'Checked in' : 'Not checked in'}
           </Text>
-          <Text style={styles.summarySub}>{weeklyOffMonthCount} weekly off day(s)</Text>
-          {isWeeklyOffToday ? <Text style={styles.summarySub}>{todayDayName} weekly off as per master salary rule</Text> : null}
+          <Text style={[styles.summarySub, {color: colors.textMuted}]}>{weeklyOffMonthCount} weekly off day(s)</Text>
+          {isWeeklyOffToday ? <Text style={[styles.summarySub, {color: colors.textMuted}]}>{todayDayName} weekly off as per master salary rule</Text> : null}
         </View>
       </Card>
 
       <Card>
         <View style={styles.locationRow}>
           <MapPin color={colors.info} size={20} />
-          <Text style={styles.locationText}>
+          <Text style={[styles.locationText, {color: colors.text}]}>
             {locationState?.distanceMeters != null
               ? `${Math.round(locationState.distanceMeters)}m from office`
               : user?.workType === 'Onsite'
@@ -356,7 +358,7 @@ export const AttendanceScreen = () => {
                 : 'Location unrestricted for this work type'}
           </Text>
         </View>
-        {locationState?.message ? <Text style={styles.locationHint}>{locationState.message}</Text> : null}
+        {locationState?.message ? <Text style={[styles.locationHint, {color: colors.textMuted}]}>{locationState.message}</Text> : null}
         <View style={styles.actions}>
           <AppButton
             icon={MapPin}
@@ -385,7 +387,7 @@ export const AttendanceScreen = () => {
       </Card>
 
       <Card>
-        <Text style={styles.filterTitle}>Attendance Filter</Text>
+        <Text style={[styles.filterTitle, {color: colors.text}]}>Attendance Filter</Text>
         <FilterChips
           items={[
             {label: 'By month', value: 'month'},
@@ -428,7 +430,7 @@ export const AttendanceScreen = () => {
         <ActivityIndicator color={colors.primary} />
       ) : (
         <View style={styles.list}>
-          {visibleRecords.map(item => <AttendanceItem key={item._id || `${item.year}-${item.month}-${item.date}`} item={item} />)}
+          {visibleRecords.map(item => <AttendanceItem key={item._id || `${item.year}-${item.month}-${item.date}`} item={item} colors={colors} />)}
           {!visibleRecords.length ? (
             <EmptyState
               title="No attendance yet"
@@ -446,28 +448,22 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   summaryLabel: {
-    color: colors.textMuted,
     fontWeight: '700',
   },
   summaryValue: {
-    color: colors.text,
     fontSize: 26,
     fontWeight: '900',
   },
-  summarySub: {
-    color: colors.textMuted,
-  },
+  summarySub: {},
   locationRow: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.sm,
   },
   locationText: {
-    color: colors.text,
     flex: 1,
   },
   locationHint: {
-    color: colors.textMuted,
     lineHeight: 20,
     marginTop: spacing.sm,
   },
@@ -488,16 +484,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   itemTitle: {
-    color: colors.text,
     fontSize: 16,
     fontWeight: '800',
   },
   itemSubtitle: {
-    color: colors.textMuted,
     marginTop: spacing.xs,
   },
   grid: {
-    borderTopColor: colors.border,
     borderTopWidth: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -506,11 +499,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   meta: {
-    color: colors.textMuted,
     minWidth: '45%',
   },
   filterTitle: {
-    color: colors.text,
     fontSize: 17,
     fontWeight: '900',
     marginBottom: spacing.md,

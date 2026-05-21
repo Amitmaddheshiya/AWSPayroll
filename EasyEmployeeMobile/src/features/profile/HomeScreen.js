@@ -7,20 +7,22 @@ import {Card} from '../../components/Card';
 import {MetricCard} from '../../components/MetricCard';
 import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
-import {colors} from '../../theme/colors';
+import {getThemeColors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
 import {todayParts} from '../../utils/date';
 import {formatCurrency} from '../../utils/money';
 
-const Field = ({label, value}) => (
-  <View style={styles.field}>
-    <Text style={styles.fieldLabel}>{label}</Text>
-    <Text style={styles.fieldValue}>{value || '-'}</Text>
+const Field = ({label, value, colors}) => (
+  <View style={[styles.field, {borderBottomColor: colors.border}]}>
+    <Text style={[styles.fieldLabel, {color: colors.textMuted}]}>{label}</Text>
+    <Text style={[styles.fieldValue, {color: colors.text}]}>{value || '-'}</Text>
   </View>
 );
 
 export const HomeScreen = ({navigation}) => {
   const {user} = useSelector(state => state.auth);
+  const themeMode = useSelector(state => state.ui.themeMode);
+  const colors = getThemeColors(themeMode);
   const [summary, setSummary] = useState({
     attendanceStatus: 'Loading',
     expenseCount: 0,
@@ -90,24 +92,24 @@ export const HomeScreen = ({navigation}) => {
       </View>
 
       <Card>
-        <Text style={styles.cardTitle}>Profile</Text>
-        <Field label="Name" value={user?.name} />
-        <Field label="Username" value={user?.username} />
-        <Field label="Email" value={user?.email} />
-        <Field label="Mobile" value={user?.mobile} />
-        <Field label="Address" value={user?.address} />
-        <Field label="User Type" value={user?.type} />
-        <Field label="Status" value={user?.status} />
-        <Field label="Designation" value={user?.designation} />
-        <Field label="Work Type" value={user?.workType} />
-        <Field label="UAN" value={user?.uan} />
-        <Field label="ESI" value={user?.esi} />
-        <Field label="PAN Number" value={user?.panNumber} />
-        <Field label="Aadhaar Number" value={user?.aadhaarNumber} />
-        <Field label="Bank Name" value={user?.bankName} />
-        <Field label="Account Number" value={user?.accountNumber} />
-        <Field label="IFSC Code" value={user?.ifscCode} />
-        <Field label="Date" value={user?.date} />
+        <Text style={[styles.cardTitle, {color: colors.text}]}>Profile</Text>
+        <Field colors={colors} label="Name" value={user?.name} />
+        <Field colors={colors} label="Username" value={user?.username} />
+        <Field colors={colors} label="Email" value={user?.email} />
+        <Field colors={colors} label="Mobile" value={user?.mobile} />
+        <Field colors={colors} label="Address" value={user?.address} />
+        <Field colors={colors} label="User Type" value={user?.type} />
+        <Field colors={colors} label="Status" value={user?.status} />
+        <Field colors={colors} label="Designation" value={user?.designation} />
+        <Field colors={colors} label="Work Type" value={user?.workType} />
+        <Field colors={colors} label="UAN" value={user?.uan} />
+        <Field colors={colors} label="ESI" value={user?.esi} />
+        <Field colors={colors} label="PAN Number" value={user?.panNumber} />
+        <Field colors={colors} label="Aadhaar Number" value={user?.aadhaarNumber} />
+        <Field colors={colors} label="Bank Name" value={user?.bankName} />
+        <Field colors={colors} label="Account Number" value={user?.accountNumber} />
+        <Field colors={colors} label="IFSC Code" value={user?.ifscCode} />
+        <Field colors={colors} label="Date" value={user?.date} />
       </Card>
 
       <View style={styles.quick}>
@@ -119,9 +121,9 @@ export const HomeScreen = ({navigation}) => {
           ['Expense', ReceiptText, 'EmployeeExpenses'],
           ['Work Type', BriefcaseBusiness, 'Profile'],
         ].map(([label, Icon, route]) => (
-          <Pressable key={label} style={styles.quickItem} onPress={() => navigation.navigate(route)}>
+          <Pressable key={label} style={[styles.quickItem, {backgroundColor: colors.surface, borderColor: colors.border}]} onPress={() => navigation.navigate(route)}>
             <Icon color={colors.primary} size={14} />
-            <Text style={styles.quickText}>{label}</Text>
+            <Text style={[styles.quickText, {color: colors.text}]}>{label}</Text>
           </Pressable>
         ))}
       </View>
@@ -129,7 +131,7 @@ export const HomeScreen = ({navigation}) => {
       <Card>
         <View style={styles.location}>
           <MapPin color={colors.info} size={19} />
-          <Text style={styles.meta}>
+          <Text style={[styles.meta, {color: colors.textMuted}]}>
             Onsite attendance uses live GPS verification. Time, date, leave, salary, and expense data come from the hosted backend.
           </Text>
         </View>
@@ -140,7 +142,6 @@ export const HomeScreen = ({navigation}) => {
 
 const styles = StyleSheet.create({
   hero: {
-    backgroundColor: colors.text,
     borderRadius: 8,
     padding: spacing.xl,
   },
@@ -152,7 +153,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   greeting: {
-    color: colors.surface,
     fontSize: 30,
     fontWeight: '900',
   },
@@ -166,31 +166,26 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   cardTitle: {
-    color: colors.text,
     fontSize: 17,
     fontWeight: '900',
     marginBottom: spacing.md,
   },
   meta: {
-    color: colors.textMuted,
     lineHeight: 22,
     marginTop: spacing.xs,
   },
   field: {
-    borderBottomColor: colors.border,
     borderBottomWidth: 1,
     flexDirection: 'row',
     gap: spacing.md,
     paddingVertical: spacing.sm,
   },
   fieldLabel: {
-    color: colors.textMuted,
     flex: 0.9,
     fontSize: 12,
     fontWeight: '800',
   },
   fieldValue: {
-    color: colors.text,
     flex: 1.1,
     fontSize: 13,
   },
@@ -201,8 +196,6 @@ const styles = StyleSheet.create({
   },
   quickItem: {
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -211,7 +204,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   quickText: {
-    color: colors.text,
     fontWeight: '800',
   },
   location: {
