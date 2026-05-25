@@ -82,15 +82,29 @@ test('configured weekly off remains weekly off, not present, when fixed paid day
   assert.equal(normalized.attendanceIn, '-');
 });
 
-test('salary cycle counts maximum 30 days even in a 31-day month', () => {
+test('salary cycle supports end day 31 in a 31-day month', () => {
   const cycle = payroll.buildPayrollCycleSettingsFromRules(masterRules({
     'Salary Cycle End Day': '31',
   }), 2026, 5);
 
-  assert.equal(cycle.endDay, 30);
+  assert.equal(cycle.endDay, 31);
   assert.equal(cycle.endDate.getFullYear(), 2026);
   assert.equal(cycle.endDate.getMonth() + 1, 5);
-  assert.equal(cycle.endDate.getDate(), 30);
+  assert.equal(cycle.endDate.getDate(), 31);
+});
+
+test('cross-month salary cycle uses requested month as cycle start month', () => {
+  const cycle = payroll.buildPayrollCycleSettingsFromRules(masterRules({
+    'Salary Cycle Start Day': '21',
+    'Salary Cycle End Day': '20',
+  }), 2026, 5);
+
+  assert.equal(cycle.startDate.getFullYear(), 2026);
+  assert.equal(cycle.startDate.getMonth() + 1, 5);
+  assert.equal(cycle.startDate.getDate(), 21);
+  assert.equal(cycle.endDate.getFullYear(), 2026);
+  assert.equal(cycle.endDate.getMonth() + 1, 6);
+  assert.equal(cycle.endDate.getDate(), 20);
 });
 
 test('salary formula uses net salary divided by fixed paid days and adds same-cycle approved expenses', () => {

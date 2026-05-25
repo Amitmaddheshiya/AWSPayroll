@@ -75,7 +75,7 @@ const isAutoWeeklyOffRecord = item =>
   String(item?.reason || '').toLowerCase().includes('auto-present');
 const currentCycleStartParts = (policies, today) => {
   const startDay = ruleNumberFromPolicies(policies, ['Salary Cycle Start Day', 'Cycle Start Day'], 1);
-  const endDay = Math.min(ruleNumberFromPolicies(policies, ['Salary Cycle End Day', 'Cycle End Day'], 30), 30);
+  const endDay = Math.min(ruleNumberFromPolicies(policies, ['Salary Cycle End Day', 'Cycle End Day'], 31), 31);
   if (startDay > endDay && today.date <= endDay) {
     const previous = new Date(today.year, today.month - 2, 1);
     return {year: previous.getFullYear(), month: previous.getMonth() + 1};
@@ -122,14 +122,13 @@ const attendanceTabOptions = [
 
 const compactLocation = location => {
   if (!location) return '';
-  const cityState = [location.city, location.state, location.country].filter(Boolean).join(', ');
-  const coords = Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude))
-    ? `Lat ${Number(location.latitude).toFixed(6)}, Lng ${Number(location.longitude).toFixed(6)}`
-    : '';
-  if (location.address && cityState && !String(location.address).includes(cityState)) {
-    return `${location.address}\n${cityState}`;
+  const place = [location.name, location.city, location.state, location.country, location.postalCode]
+    .filter(Boolean)
+    .join(', ');
+  if (location.address && place && !String(location.address).includes(location.city || place)) {
+    return `${location.address}\n${place}`;
   }
-  return location.address || cityState || coords;
+  return location.address || place || '';
 };
 
 const valueWithLocation = (time, location) => {

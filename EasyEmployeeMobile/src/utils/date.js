@@ -40,7 +40,7 @@ export const datePartsFromDate = date => ({
 
 export const buildCycleDates = (cycle, fallbackYear, fallbackMonth, today = todayParts()) => {
   const start = parseIsoDate(cycle?.startDate) || new Date(fallbackYear, fallbackMonth - 1, 1);
-  const fallbackEndDay = Math.min(new Date(fallbackYear, fallbackMonth, 0).getDate(), 30);
+  const fallbackEndDay = new Date(fallbackYear, fallbackMonth, 0).getDate();
   const end = parseIsoDate(cycle?.endDate) || new Date(fallbackYear, fallbackMonth - 1, fallbackEndDay);
   const todayDate = new Date(today.year, today.month - 1, today.date);
   const last = end > todayDate ? todayDate : end;

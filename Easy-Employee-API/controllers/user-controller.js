@@ -469,21 +469,26 @@ const buildPayrollCycleSettingsFromRules = (rules, year, month) => {
   const requestedStartDay = getRuleNumber(rules, ['Salary Cycle Start Day', 'Cycle Start Day'], 1);
   const requestedEndDay = getRuleNumber(rules, ['Salary Cycle End Day', 'Cycle End Day'], monthDays);
   const startDay = Math.min(Math.max(requestedStartDay, 1), 31);
-  const endDay = Math.min(Math.max(requestedEndDay, 1), 30);
+  const endDay = Math.min(Math.max(requestedEndDay, 1), 31);
   const halfTimeMinimumHours = getRuleNumber(rules, ['Half Time Minimum Hours', 'Minimum Full Time Hours', 'Minimum Full Day Hours'], 7);
   const sundayAutoPaidAbove = getRuleNumber(rules, ['Sunday Auto Paid When Open Days Above'], 26);
   const weeklyOffDays = splitRuleList(getRuleValue(rules, ['Weekly Off Days', 'Weekly Off'], 'Sunday')).map(item => item.toLowerCase());
   const paidHolidayDates = splitRuleList(getRuleValue(rules, ['Paid Holiday Dates', 'Holiday Dates'], '')).map(item => item.toLowerCase());
   const paidHolidayNames = splitRuleList(getRuleValue(rules, ['Paid Holiday Names', 'Festival Holidays', 'National Holidays'], '')).map(item => item.toLowerCase());
-  const startMonthDate = startDay <= endDay
+  const startMonthDate = new Date(year, month - 1, 1);
+  const endMonthDate = startDay <= endDay
     ? new Date(year, month - 1, 1)
-    : new Date(year, month - 2, 1);
+    : new Date(year, month, 1);
   const startDate = new Date(
     startMonthDate.getFullYear(),
     startMonthDate.getMonth(),
     clampDayToMonth(startMonthDate.getFullYear(), startMonthDate.getMonth() + 1, startDay),
   );
-  const endDate = new Date(year, month - 1, clampDayToMonth(year, month, endDay));
+  const endDate = new Date(
+    endMonthDate.getFullYear(),
+    endMonthDate.getMonth(),
+    clampDayToMonth(endMonthDate.getFullYear(), endMonthDate.getMonth() + 1, endDay),
+  );
   const finalStartDate = startDate;
   const finalEndDate = endDate;
   const workingDates = dateRange(finalStartDate, finalEndDate).filter(dateObj => {
