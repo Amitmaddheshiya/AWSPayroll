@@ -123,10 +123,13 @@ const attendanceTabOptions = [
 const compactLocation = location => {
   if (!location) return '';
   const cityState = [location.city, location.state, location.country].filter(Boolean).join(', ');
+  const coords = Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude))
+    ? `Lat ${Number(location.latitude).toFixed(6)}, Lng ${Number(location.longitude).toFixed(6)}`
+    : '';
   if (location.address && cityState && !String(location.address).includes(cityState)) {
     return `${location.address}\n${cityState}`;
   }
-  return location.address || cityState || '';
+  return location.address || cityState || coords;
 };
 
 const valueWithLocation = (time, location) => {
@@ -325,7 +328,7 @@ export const AdminAttendanceScreen = ({route}) => {
         .filter(item => item.adminResponse === 'Approved' && item.startDate <= todayIso && item.endDate >= todayIso)
         .map(item => String(item.applicantID)),
     );
-    const recordByEmployee = new Map(todayRecords.map(item => [String(item.employeeID), item]));
+    const recordByEmployee = new Map(todayRecords.map(item => [idOf(item.employeeID), item]));
     return employees
       .filter(employee => {
         const employeeId = idOf(employee);
@@ -364,13 +367,14 @@ export const AdminAttendanceScreen = ({route}) => {
     if (weeklyOffDays.includes(todayDay.toLowerCase())) return [];
     const employeeById = new Map(employees.map(employee => [idOf(employee), employee]));
     return todayRecords
-      .filter(record => record.present && employeeById.has(String(record.employeeID)))
+      .filter(record => record.present && employeeById.has(idOf(record.employeeID)))
       .map(record => {
-        const employee = employeeById.get(String(record.employeeID));
+        const employeeId = idOf(record.employeeID);
+        const employee = employeeById.get(employeeId);
         return {
           key: `today-present-${record._id || record.id || record.employeeID}`,
           id: record._id || record.id || '',
-          employeeID: String(record.employeeID),
+          employeeID: employeeId,
           month: today.month,
           year: today.year,
           name: employee?.name || employee?.username || '-',
@@ -485,12 +489,12 @@ export const AdminAttendanceScreen = ({route}) => {
         </View>
       </Card>
 
-      {activeTab === 'present' ? <Card>
+      {activeTab === 'present' ? <View style={styles.todaySection}>
         <Text style={styles.section}>Present Today</Text>
         <Text style={styles.meta}>{displayDate(today.year, today.month, today.date)} / {todayPresentRows.length} employee or leader present</Text>
-        <ScrollView nestedScrollEnabled style={styles.absentList}>
+        <View style={styles.todayList}>
           {todayPresentRows.map(row => (
-            <View key={row.key} style={styles.absentRow}>
+            <View key={row.key} style={styles.todayRowCard}>
               <View style={styles.flex}>
                 <Text style={styles.name}>{row.name}</Text>
                 <Text style={styles.meta}>{row.email}</Text>
@@ -513,16 +517,16 @@ export const AdminAttendanceScreen = ({route}) => {
               />
             </View>
           ))}
-        </ScrollView>
+        </View>
         {!todayPresentRows.length ? <Text style={styles.empty}>No present employees today.</Text> : null}
-      </Card> : null}
+      </View> : null}
 
-      {activeTab === 'absent' ? <Card>
+      {activeTab === 'absent' ? <View style={styles.todaySection}>
         <Text style={styles.section}>Absent Today</Text>
         <Text style={styles.meta}>{displayDate(today.year, today.month, today.date)} / {todayAbsentRows.length} employee or leader absent</Text>
-        <ScrollView nestedScrollEnabled style={styles.absentList}>
+        <View style={styles.todayList}>
           {todayAbsentRows.map(row => (
-            <View key={row.key} style={styles.absentRow}>
+            <View key={row.key} style={styles.todayRowCard}>
               <View style={styles.flex}>
                 <Text style={styles.name}>{row.name}</Text>
                 <Text style={styles.meta}>{row.email}</Text>
@@ -557,9 +561,9 @@ export const AdminAttendanceScreen = ({route}) => {
               ) : null}
             </View>
           ))}
-        </ScrollView>
+        </View>
         {!todayAbsentRows.length ? <Text style={styles.empty}>No absent employees today.</Text> : null}
-      </Card> : null}
+      </View> : null}
 
       {activeTab === 'all' ? <Card>
         <Text style={styles.title}>Attendance Filters</Text>
@@ -684,8 +688,16 @@ const styles = StyleSheet.create({
   twoCol: {flexDirection: 'row', gap: spacing.md},
   flex: {flex: 1},
   employeeList: {maxHeight: 246},
-  absentList: {maxHeight: 330, marginTop: spacing.sm},
-  absentRow: {borderBottomColor: colors.border, borderBottomWidth: 1, gap: spacing.sm, paddingVertical: spacing.sm},
+  todaySection: {gap: spacing.sm, marginBottom: spacing.md},
+  todayList: {gap: spacing.sm, marginTop: spacing.sm},
+  todayRowCard: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
   inlineEdit: {gap: spacing.sm, marginTop: spacing.sm},
   employeeRow: {alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.sm},
   editBox: {gap: spacing.sm, marginTop: spacing.md},

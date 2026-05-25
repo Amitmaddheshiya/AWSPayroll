@@ -45,16 +45,32 @@ const AttendanceItem = ({item, colors}) => (
 const compactLocation = location => {
   if (!location) return '';
   const cityState = [location.city, location.state, location.country].filter(Boolean).join(', ');
+  const coords = Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude))
+    ? `Lat ${Number(location.latitude).toFixed(6)}, Lng ${Number(location.longitude).toFixed(6)}`
+    : '';
   if (location.address && cityState && !String(location.address).includes(cityState)) {
     return `${location.address}\n${cityState}`;
   }
-  return location.address || cityState || '';
+  return location.address || cityState || coords;
 };
 
 const formatLocationLine = location => {
   const text = compactLocation(location);
   return text ? `\n${text}` : '';
 };
+
+const locationPayload = locationResult => ({
+  latitude: locationResult.latitude,
+  longitude: locationResult.longitude,
+  accuracy: locationResult.accuracy,
+  address: locationResult.address,
+  city: locationResult.address?.city,
+  state: locationResult.address?.state,
+  country: locationResult.address?.country,
+  postalCode: locationResult.address?.postalCode,
+  name: locationResult.address?.name,
+  source: 'mobile',
+});
 
 const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const splitRuleList = value =>
@@ -312,11 +328,7 @@ export const AttendanceScreen = () => {
     await dispatch(
       checkIn({
         employeeID: user.id,
-        latitude: locationResult.latitude,
-        longitude: locationResult.longitude,
-        accuracy: locationResult.accuracy,
-        address: locationResult.address,
-        source: 'mobile',
+        ...locationPayload(locationResult),
       }),
     );
     refresh();
@@ -334,11 +346,7 @@ export const AttendanceScreen = () => {
     await dispatch(
       checkOut({
         employeeID: user.id,
-        latitude: locationResult.latitude,
-        longitude: locationResult.longitude,
-        accuracy: locationResult.accuracy,
-        address: locationResult.address,
-        source: 'mobile',
+        ...locationPayload(locationResult),
       }),
     );
     refresh();

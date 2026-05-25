@@ -18,6 +18,8 @@ const teamService = require('../services/team-service');
 const attendanceService = require('../services/attendance-service');
 const payrollPolicyService = require('../services/payrollPolicyService');
 
+const APP_TIME_ZONE = process.env.APP_TIME_ZONE || 'Asia/Kolkata';
+
 const toNumber = value => {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
@@ -52,6 +54,43 @@ const getDateParts = (date = new Date()) => ({
   month: date.getMonth() + 1,
   date: date.getDate(),
 });
+
+const appDateTimeParts = (date = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-IN', {
+    timeZone: APP_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    weekday: 'long',
+  }).formatToParts(date);
+  const value = type => parts.find(item => item.type === type)?.value;
+  return {
+    year: Number(value('year')),
+    month: Number(value('month')),
+    date: Number(value('day')),
+    day: value('weekday'),
+    hour: Number(value('hour')) % 24,
+    minute: Number(value('minute')),
+  };
+};
+
+const appDateOnly = (date = new Date()) => {
+  const parts = appDateTimeParts(date);
+  return new Date(parts.year, parts.month - 1, parts.date);
+};
+
+const formatAppTime = (date = new Date()) =>
+  new Intl.DateTimeFormat('en-IN', {
+    timeZone: APP_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
+    .format(date)
+    .replace(/\s?(am|pm)$/i, value => ` ${value.trim().toUpperCase()}`);
 
 const normalizeDateOnly = date => {
   const copy = new Date(date);
@@ -870,6 +909,18 @@ const validateAttendanceLocation = async (employeeID, latitude, longitude) => {
   }
 
   return { valid: true, distanceMeters };
+};
+
+const attendanceAddressFromBody = body => {
+  const nested = body?.address && typeof body.address === 'object' ? body.address : {};
+  return {
+    address: nested.address || (typeof body?.address === 'string' ? body.address : '') || body?.formattedAddress || '',
+    name: nested.name || body?.name || '',
+    city: nested.city || body?.city || '',
+    state: nested.state || body?.state || '',
+    country: nested.country || body?.country || '',
+    postalCode: nested.postalCode || body?.postalCode || '',
+  };
 };
 
 const attendanceLocationPayload = (latitude, longitude, accuracy, distanceMeters, address = {}) => {
@@ -1817,14 +1868,12 @@ createUser = async (req, res) => {
     }
 
     getAdminDashboard = async (req, res) => {
-      const today = getDateParts();
+      const today = appDateTimeParts();
       const currentMonth = today.month;
       const currentYear = today.year;
-      const todayIso = new Date().toISOString().split('T')[0];
+      const todayIso = formatIsoDate(new Date(today.year, today.month - 1, today.date));
       const dashboardCycle = await getPayrollCycleSettings(currentYear, currentMonth);
-      const todayDay = new Date(currentYear, currentMonth - 1, today.date)
-        .toLocaleDateString('en-US', { weekday: 'long' })
-        .toLowerCase();
+      const todayDay = String(today.day).toLowerCase();
       const isWeeklyOffToday = dashboardCycle.weeklyOffDays.includes(todayDay);
       const workforceFilter = { type: { $in: ['employee', 'leader'] } };
       const activeWorkforceFilter = { ...workforceFilter, status: 'active' };
@@ -1981,17 +2030,18 @@ createUser = async (req, res) => {
     const { employeeID } = req.body;
     const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     const d = new Date();
-    const todayDay = days[d.getDay()];
-    const cycle = await getPayrollCycleSettings(d.getFullYear(), d.getMonth() + 1);
+    const nowParts = appDateTimeParts(d);
+    const todayDay = nowParts.day || days[new Date(nowParts.year, nowParts.month - 1, nowParts.date).getDay()];
+    const cycle = await getPayrollCycleSettings(nowParts.year, nowParts.month);
     if (cycle.weeklyOffDays.includes(todayDay.toLowerCase())) {
       return res.json({ success: false, message: `${todayDay} is weekly off as per master salary rule.` });
     }
 
       const newAttendance = {
       employeeID,
-      year: d.getFullYear(),
-      month: d.getMonth() + 1,
-      date: d.getDate(),
+      year: nowParts.year,
+      month: nowParts.month,
+      date: nowParts.date,
       day: todayDay,
       present: true,
       status: "Present",
@@ -2015,38 +2065,36 @@ createUser = async (req, res) => {
 
  checkInEmployeeAttendance = async (req, res, next) => {
   try {
-    const { employeeID, latitude, longitude, accuracy, address } = req.body;
+    const { employeeID, latitude, longitude, accuracy } = req.body;
+    const address = attendanceAddressFromBody(req.body);
     const locationCheck = await validateAttendanceLocation(employeeID, latitude, longitude);
     if (!locationCheck.valid) {
       return res.json({ success: false, message: locationCheck.message });
     }
     const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     const d = new Date();
-    const cycle = await getPayrollCycleSettings(d.getFullYear(), d.getMonth() + 1);
-    const todayDay = days[d.getDay()];
+    const nowParts = appDateTimeParts(d);
+    const cycle = await getPayrollCycleSettings(nowParts.year, nowParts.month);
+    const todayDay = nowParts.day || days[new Date(nowParts.year, nowParts.month - 1, nowParts.date).getDay()];
     if (cycle.weeklyOffDays.includes(todayDay.toLowerCase())) {
       return res.json({ success: false, message: `${todayDay} is weekly off as per master salary rule.` });
     }
 
     // Convert current time to readable format
-    const attendanceIn = d.toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
+    const attendanceIn = formatAppTime(d);
 
     // ✅ Extract current hour & minute in 24-hour format
-    const currentHour = d.getHours(); // e.g. 10
-    const currentMinute = d.getMinutes(); // e.g. 45
+    const currentHour = nowParts.hour; // e.g. 10
+    const currentMinute = nowParts.minute; // e.g. 45
 
     // ✅ Company start time — 11:00 AM
     const late = currentHour > 11 || (currentHour === 11 && currentMinute > 0) ? "Yes" : "No";
 
     const newAttendance = {
       employeeID,
-      year: d.getFullYear(),
-      month: d.getMonth() + 1,
-      date: d.getDate(),
+      year: nowParts.year,
+      month: nowParts.month,
+      date: nowParts.date,
       day: todayDay,
       present: true,
       status: "Present",
@@ -2064,9 +2112,9 @@ createUser = async (req, res) => {
     // ✅ Prevent duplicate check-ins
     const isMarked = await attendanceService.findAttendance({
       employeeID,
-      year: d.getFullYear(),
-      month: d.getMonth() + 1,
-      date: d.getDate(),
+      year: nowParts.year,
+      month: nowParts.month,
+      date: nowParts.date,
     });
 
     if (isMarked)
@@ -2087,16 +2135,18 @@ createUser = async (req, res) => {
 
 checkOutEmployeeAttendance = async (req, res, next) => {
   try {
-    const { employeeID, latitude, longitude, accuracy, address } = req.body;
+    const { employeeID, latitude, longitude, accuracy } = req.body;
+    const address = attendanceAddressFromBody(req.body);
     const locationCheck = await validateAttendanceLocation(employeeID, latitude, longitude);
     if (!locationCheck.valid) {
       return res.json({ success: false, message: locationCheck.message });
     }
     const d = new Date();
+    const nowParts = appDateTimeParts(d);
 
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
-    const date = d.getDate();
+    const year = nowParts.year;
+    const month = nowParts.month;
+    const date = nowParts.date;
     const cycle = await getPayrollCycleSettings(year, month);
 
     const record = await attendanceService.findTodayAttendance(
@@ -2112,11 +2162,7 @@ checkOutEmployeeAttendance = async (req, res, next) => {
     if (record.attendanceOut)
       return res.json({ success: false, message: "Already checked out today!" });
 
-    const attendanceOut = d.toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
+    const attendanceOut = formatAppTime(d);
 
     // ✅ Calculate total hours as decimal
     const totalHours = hoursBetweenTimes(record.attendanceIn, attendanceOut).toFixed(2);
@@ -2155,7 +2201,7 @@ checkOutEmployeeAttendance = async (req, res, next) => {
             if (year && month && !data.date) {
               const cycle = await getAttendanceCycleSettings(year, month);
               const rangeQuery = monthYearPairsForRange(cycle.startDate, cycle.endDate);
-              const today = normalizeDateOnly(new Date());
+              const today = appDateOnly(new Date());
               const autoEndDate = today < cycle.startDate
                 ? null
                 : (today < cycle.endDate ? today : cycle.endDate);
@@ -2242,7 +2288,7 @@ updateEmployeeAttendance = async (req, res, next) => {
     }
 
     // 🚫 Prevent editing future date
-    const today = new Date();
+    const today = appDateOnly(new Date());
     const targetDate = new Date(year, month - 1, date);
     today.setHours(0, 0, 0, 0);
     if (targetDate > today) {
