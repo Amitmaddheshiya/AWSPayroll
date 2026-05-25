@@ -32,8 +32,8 @@ const AttendanceItem = ({item, colors}) => (
       <StatusPill value={item.displayStatus || item.status || (item.present ? 'Present' : 'Absent')} />
     </View>
     <View style={[styles.grid, {borderTopColor: colors.border}]}>
-      <Text style={[styles.meta, {color: colors.textMuted}]}>In: {item.attendanceIn || '-'}</Text>
-      <Text style={[styles.meta, {color: colors.textMuted}]}>Out: {item.attendanceOut || '-'}</Text>
+      <Text style={[styles.meta, {color: colors.textMuted}]}>In: {item.attendanceIn || '-'}{formatLocationLine(item.checkInLocation)}</Text>
+      <Text style={[styles.meta, {color: colors.textMuted}]}>Out: {item.attendanceOut || '-'}{formatLocationLine(item.checkOutLocation)}</Text>
       <Text style={[styles.meta, {color: colors.textMuted}]}>Late: {item.late || '-'}</Text>
       <Text style={[styles.meta, {color: colors.textMuted}]}>Hours: {item.totalHours || '-'}</Text>
       <Text style={[styles.meta, {color: colors.textMuted}]}>Status: {item.displayTimeStatus || item.timeStatus || item.displayStatus || item.status || '-'}</Text>
@@ -41,6 +41,20 @@ const AttendanceItem = ({item, colors}) => (
     </View>
   </Card>
 );
+
+const compactLocation = location => {
+  if (!location) return '';
+  const cityState = [location.city, location.state, location.country].filter(Boolean).join(', ');
+  if (location.address && cityState && !String(location.address).includes(cityState)) {
+    return `${location.address}\n${cityState}`;
+  }
+  return location.address || cityState || '';
+};
+
+const formatLocationLine = location => {
+  const text = compactLocation(location);
+  return text ? `\n${text}` : '';
+};
 
 const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const splitRuleList = value =>
@@ -301,6 +315,7 @@ export const AttendanceScreen = () => {
         latitude: locationResult.latitude,
         longitude: locationResult.longitude,
         accuracy: locationResult.accuracy,
+        address: locationResult.address,
         source: 'mobile',
       }),
     );
@@ -322,6 +337,7 @@ export const AttendanceScreen = () => {
         latitude: locationResult.latitude,
         longitude: locationResult.longitude,
         accuracy: locationResult.accuracy,
+        address: locationResult.address,
         source: 'mobile',
       }),
     );

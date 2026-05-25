@@ -850,14 +850,14 @@ const validateAttendanceLocation = async (employeeID, latitude, longitude) => {
     return { valid: false, message: "Employee not found" };
   }
 
-  if (String(employee.workType).toLowerCase() !== "onsite") {
-    return { valid: true };
-  }
-
   const lat = Number(latitude);
   const lng = Number(longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return { valid: false, message: "Office location verification is required" };
+    return { valid: false, message: "Current location is required" };
+  }
+
+  if (String(employee.workType).toLowerCase() !== "onsite") {
+    return { valid: true };
   }
 
   const officeLocation = await getActiveOfficeLocation();
@@ -872,9 +872,10 @@ const validateAttendanceLocation = async (employeeID, latitude, longitude) => {
   return { valid: true, distanceMeters };
 };
 
-const attendanceLocationPayload = (latitude, longitude, accuracy, distanceMeters) => {
+const attendanceLocationPayload = (latitude, longitude, accuracy, distanceMeters, address = {}) => {
   const lat = Number(latitude);
   const lng = Number(longitude);
+  const addressData = address || {};
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return undefined;
   }
@@ -883,6 +884,12 @@ const attendanceLocationPayload = (latitude, longitude, accuracy, distanceMeters
     longitude: lng,
     accuracy: Number.isFinite(Number(accuracy)) ? Number(accuracy) : undefined,
     distanceMeters,
+    address: addressData.address || '',
+    name: addressData.name || '',
+    city: addressData.city || '',
+    state: addressData.state || '',
+    country: addressData.country || '',
+    postalCode: addressData.postalCode || '',
   };
 };
 
@@ -2008,7 +2015,7 @@ createUser = async (req, res) => {
 
  checkInEmployeeAttendance = async (req, res, next) => {
   try {
-    const { employeeID, latitude, longitude, accuracy } = req.body;
+    const { employeeID, latitude, longitude, accuracy, address } = req.body;
     const locationCheck = await validateAttendanceLocation(employeeID, latitude, longitude);
     if (!locationCheck.valid) {
       return res.json({ success: false, message: locationCheck.message });
@@ -2049,7 +2056,8 @@ createUser = async (req, res) => {
         latitude,
         longitude,
         accuracy,
-        locationCheck.distanceMeters
+        locationCheck.distanceMeters,
+        address
       ),
     };
 
@@ -2079,7 +2087,7 @@ createUser = async (req, res) => {
 
 checkOutEmployeeAttendance = async (req, res, next) => {
   try {
-    const { employeeID, latitude, longitude, accuracy } = req.body;
+    const { employeeID, latitude, longitude, accuracy, address } = req.body;
     const locationCheck = await validateAttendanceLocation(employeeID, latitude, longitude);
     if (!locationCheck.valid) {
       return res.json({ success: false, message: locationCheck.message });
@@ -2125,7 +2133,8 @@ checkOutEmployeeAttendance = async (req, res, next) => {
         latitude,
         longitude,
         accuracy,
-        locationCheck.distanceMeters
+        locationCheck.distanceMeters,
+        address
       ),
     });
 

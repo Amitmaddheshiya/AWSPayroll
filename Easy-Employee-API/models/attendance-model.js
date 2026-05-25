@@ -24,13 +24,25 @@ const AttendanceSchema = new Schema({
     latitude: { type: Number },
     longitude: { type: Number },
     accuracy: { type: Number },
-    distanceMeters: { type: Number }
+    distanceMeters: { type: Number },
+    address: { type: String, trim: true },
+    name: { type: String, trim: true },
+    city: { type: String, trim: true },
+    state: { type: String, trim: true },
+    country: { type: String, trim: true },
+    postalCode: { type: String, trim: true }
   },
   checkOutLocation: {
     latitude: { type: Number },
     longitude: { type: Number },
     accuracy: { type: Number },
-    distanceMeters: { type: Number }
+    distanceMeters: { type: Number },
+    address: { type: String, trim: true },
+    name: { type: String, trim: true },
+    city: { type: String, trim: true },
+    state: { type: String, trim: true },
+    country: { type: String, trim: true },
+    postalCode: { type: String, trim: true }
   }
 });
 

@@ -1,7 +1,9 @@
-import {Alert, Linking, PermissionsAndroid, Platform} from 'react-native';
+import {Alert, Linking, NativeModules, PermissionsAndroid, Platform} from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
 import {getEmployeeOfficeLocations} from '../api/employeeApi';
 import {LOCATION_OPTIONS, OFFICE_LOCATION} from '../config/env';
+
+const {LocationAddressModule} = NativeModules;
 
 const toRadians = value => (value * Math.PI) / 180;
 
@@ -75,22 +77,34 @@ export const getActiveOfficeLocation = async () => {
   }
 };
 
-export const verifyOfficeLocation = async workType => {
-  const officeLocation = await getActiveOfficeLocation();
-  if (String(workType).toLowerCase() !== 'onsite') {
-    return {
-      allowed: true,
-      distanceMeters: 0,
-      officeLocation,
-      message: 'Location check skipped for non-onsite employee.',
-    };
+const resolveAddress = async coords => {
+  if (!LocationAddressModule?.reverseGeocode || !Number.isFinite(Number(coords?.latitude)) || !Number.isFinite(Number(coords?.longitude))) {
+    return null;
   }
 
+  try {
+    return await LocationAddressModule.reverseGeocode(Number(coords.latitude), Number(coords.longitude));
+  } catch (error) {
+    return null;
+  }
+};
+
+const fallbackAddress = coords => ({
+  address: '',
+  name: '',
+  city: '',
+  state: '',
+  country: '',
+  postalCode: '',
+});
+
+export const verifyOfficeLocation = async workType => {
+  const officeLocation = await getActiveOfficeLocation();
   const hasPermission = await requestLocationPermission();
   if (!hasPermission) {
     Alert.alert(
       'Location required',
-      'Please allow precise location access to mark onsite attendance.',
+      'Please allow precise location access to mark attendance.',
       [{text: 'Open settings', onPress: () => Linking.openSettings()}, {text: 'OK'}],
     );
     return {allowed: false, distanceMeters: null, message: 'Location permission denied.'};
@@ -102,7 +116,9 @@ export const verifyOfficeLocation = async workType => {
     longitude: coords.longitude,
   }, officeLocation);
   const radiusMeters = Number(officeLocation.radiusMeters || OFFICE_LOCATION.radiusMeters || 100);
-  const allowed = distanceMeters <= radiusMeters;
+  const isOnsite = String(workType).toLowerCase() === 'onsite';
+  const allowed = !isOnsite || distanceMeters <= radiusMeters;
+  const address = (await resolveAddress(coords)) || fallbackAddress(coords);
 
   return {
     allowed,
@@ -110,9 +126,12 @@ export const verifyOfficeLocation = async workType => {
     accuracy: coords.accuracy,
     latitude: coords.latitude,
     longitude: coords.longitude,
+    address,
     officeLocation,
     message: allowed
-      ? `You are within ${Math.round(radiusMeters)}m office radius.`
+      ? isOnsite
+        ? `You are within ${Math.round(radiusMeters)}m office radius.`
+        : 'Current location captured for attendance.'
       : `You are ${Math.round(distanceMeters)}m from office. Move within ${Math.round(radiusMeters)}m to check in.`,
   };
 };
